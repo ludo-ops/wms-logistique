@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>WMS — Passer une commande</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, updateDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let articles = [], orders = [];
+let currentOrder = null, userName = '';
+
+const $ = id => document.getElementById(id);
+
+function normalizeSku(sku){
+  if(!sku) return null;
+  const m = sku.toUpperCase().match(/^([A-Z]{2,5})-?0*(\d+)$/);
+  return m ? m[1]+'-'+m[2].padStart(3,'0') : null;
+}
+
+function showPage(n){
+  [1,2,3,4].forEach(i=>{
+    const p=$(''+'page-'+i);
+    const s=$(''+'step-'+i);
+    p.classList.toggle('active',i===n);
+    if(s){s.classList.toggle('active',i===n);s.classList.toggle('done',i<n);}
+  });
+}
+function goToPage(n){showPage(n);}
+window.goToPage=goToPage;
+
+let alertTimer=null;
+function showAlert(msg,type='success',duration=3000){
+  const bar=$('alert-bar');
+  bar.textContent=msg;bar.className='show '+type;
+  clearTimeout(alertTimer);
+  alertTimer=setTimeout(()=>bar.className='',duration);
+}
+
+function playBeep(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [440,550,660,550,440].forEach((freq,i)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=freq;osc.type='square';
+      gain.gain.setValueAtTime(0.3,ctx.currentTime+i*0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.15+0.14);
+      osc.start(ctx.currentTime+i*0.15);osc.stop(ctx.currentTime+i*0.15+0.15);
+    });
+  }catch(e){}
+}
+
+function populateOrderSelect(){
+  const sel=$('order-select');
+  const prev=sel.value;
+  const available=orders.filter(o=>o.status==='pending'||o.status==='inprogress');
+  sel.innerHTML='<option value="">Sélectionner une commande</option>'+available.map(o=>{
+    const label=o.id+' — '+o.client+(o.urgent?' — URGENT':'')+(o.isReal?' — Réelle':'');
+    return `<option value="${o.id}"${o.id===prev?' selected':''}>${label}</option>`;
+  }).join('');
+  if(prev) previewOrder();
+}
+
+function previewOrder(){
+  const id=$('order-select').value;
+  const o=orders.find(x=>x.id===id);
+  const box=$('order-preview');
+  if(!o){box.style.display='none';return;}
+  box.style.display='block';
+  const totalItems=o.items.reduce((s,it)=>s+Number(it.qty||0),0);
+  box.innerHTML=`
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      ${o.urgent?'<span class="badge badge-urgent">URGENT</span>':''}
+      ${o.isReal?'<span class="badge badge-real">Réelle</span>':''}
+      <span class="badge" style="background:#e8f0fe;color:#1a73e8">${o.items.length} articles</span>
+      <span class="badge" style="background:#e8f5e9;color:#2e7d32">${totalItems} pièces</span>
+    </div>
+    <div style="font-size:12px;color:#666">Tracking : <code>${o.tracking}</code></div>`;
+}
+window.previewOrder=previewOrder;
+
+function goToScan(){
+  const name=$('user-name').value.trim();
+  if(!name){showAlert('Entrez votre prénom et nom','warn');return;}
+  const id=$('order-select').value;
+  if(!id){showAlert('Sélectionnez une commande','warn');return;}
+  const o=orders.find(x=>x.id===id);
+  if(!o){showAlert('Commande introuvable','error');return;}
+  userName=name;
+  currentOrder=JSON.parse(JSON.stringify(o));
+  renderScanPage();
+  showPage(2);
+  if(o.urgent||o.isReal){
+    playBeep();
+    $('modal-urgent-msg').textContent='Cette commande est marquée URGENTE. Traitez-la en priorité !';
+    $('modal-urgent').classList.add('show');
+  }
+}
+window.goToScan=goToScan;
+
+function renderScanPage(){
+  const o=currentOrder; if(!o) return;
+  const totalQty=o.items.reduce((s,it)=>s+Number(it.qty||0),0);
+  const scannedQty=o.items.reduce((s,it)=>s+Number(it.scanned||0),0);
+  const allDone=o.items.every(it=>Number(it.scanned||0)>=Number(it.qty||0));
+  $('order-info-bar').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div><div style="font-weight:700;font-size:14px">${o.id} — ${o.client}</div><div style="font-size:12px;color:#666">Tracking : <code>${o.tracking}</code></div></div>
+      <div style="text-align:right">${o.urgent?'<span class="badge badge-urgent">URGENT</span>':''}<span style="font-size:13px;font-weight:600;color:${allDone?'var(--green)':'var(--blue)'};margin-left:6px">${scannedQty}/${totalQty} pièces</span></div>
+    </div>`;
+  $('items-container').innerHTML=o.items.map(it=>{
+    const sc=Number(it.scanned||0);
+    const pct=Math.round(sc/Number(it.qty||1)*100);
+    const done=sc>=Number(it.qty||0);
+    return `<div class="item-card" style="border-color:${done?'var(--green)':'var(--border)'}">
+      <div class="item-header">
+        <div><div class="item-name">${it.name}</div><div class="item-sku">${it.sku}</div><div class="item-location">📍 ${it.location||''}</div></div>
+        <div style="font-size:20px">${done?'✅':''}</div>
+      </div>
+      <div class="item-progress">
+        <div class="progress-bar"><div class="progress-fill${done?' done':''}" style="width:${pct}%"></div></div>
+        <div class="scan-count">${sc}/${it.qty} scannés</div>
+      </div>
+      ${!done?`<div class="scan-input-row">
+        <input type="text" id="scan-${it.sku}" placeholder="Scanner ou encoder ${it.sku}" autocomplete="off" onkeydown="if(event.key==='Enter')scanItem('${it.sku}')"/>
+        <button onclick="scanItem('${it.sku}')">Scanner</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+  const btnValidate=$('btn-validate');
+  btnValidate.disabled=!allDone;
+  btnValidate.style.opacity=allDone?1:.5;
+}
+
+window.scanItem=function(expectedSku){
+  const input=$('scan-'+expectedSku);
+  const entered=normalizeSku(input.value.trim());
+  if(!entered){showAlert('Format SKU invalide','error');return;}
+  if(entered!==expectedSku){showAlert('Mauvais article ! Attendu '+expectedSku+', scanné '+entered,'error');input.value='';return;}
+  const item=currentOrder.items.find(it=>it.sku===expectedSku);
+  if(!item) return;
+  item.scanned=Math.min(Number(item.qty||0),Number(item.scanned||0)+1);
+  input.value='';
+  renderScanPage();
+  showAlert('Article scanné ✓','success');
+  updateDoc(doc(db,'orders',currentOrder.id),{items:currentOrder.items,status:'inprogress',assignedTo:userName}).catch(console.error);
+};
+
+function confirmValidation(){
+  const o=currentOrder; if(!o) return;
+  const allDone=o.items.every(it=>Number(it.scanned||0)>=Number(it.qty||0));
+  if(!allDone){showAlert('Tous les articles ne sont pas encore scannés !','warn');return;}
+  const totalQty=o.items.reduce((s,it)=>s+Number(it.qty||0),0);
+  $('modal-confirm-body').innerHTML=`
+    <p style="margin-bottom:12px;color:#555">Vérifiez le récapitulatif avant de valider :</p>
+    ${o.items.map(it=>`<div class="summary-item"><span><strong>${it.sku}</strong> ${it.name}</span><span>${it.qty}</span></div>`).join('')}
+    <div class="summary-item" style="font-weight:700;color:var(--blue);border:none;margin-top:8px"><span>Total pièces</span><span>${totalQty}</span></div>
+    <div style="margin-top:12px;padding:10px;background:#fff8e1;border-radius:6px;font-size:13px;color:#555">Cette action est <strong>irréversible</strong>. Confirmez uniquement si tout est correct.</div>`;
+  $('modal-confirm').classList.add('show');
+}
+window.confirmValidation=confirmValidation;
+
+window.closeConfirmModal=function(){$('modal-confirm').classList.remove('show');};
+window.doValidateOrder=async function(){
+  $('modal-confirm').classList.remove('show');
+  if(!currentOrder) return;
+  await updateDoc(doc(db,'orders',currentOrder.id),{status:'completed',assignedTo:userName,items:currentOrder.items});
+  showPage(3);
+};
+
+async function submitOrder(){
+  const service=$('info-service').value.trim();
+  const lieu=$('info-lieu').value.trim();
+  if(!service||!lieu){showAlert('Service et lieu de livraison requis','warn');return;}
+  await updateDoc(doc(db,'orders',currentOrder.id),{service,lieu,status:'completed',assignedTo:userName});
+  const trk=currentOrder.tracking;
+  $('confirm-tracking').textContent=trk;
+  try{JsBarcode('confirm-barcode',trk,{format:'CODE128',width:2,height:50,displayValue:false});}catch(e){}
+  showPage(4);
+}
+window.submitOrder=submitOrder;
+
+window.resetApp=function(){
+  currentOrder=null;userName='';
+  $('user-name').value='';$('order-select').value='';$('order-preview').style.display='none';
+  $('info-service').value='';$('info-lieu').value='';$('info-comment').value='';
+  populateOrderSelect();showPage(1);
+};
+
+onSnapshot(collection(db,'articles'),snap=>{
+  articles=snap.docs.map(d=>d.data());
+});
+onSnapshot(collection(db,'orders'),snap=>{
+  orders=snap.docs.map(d=>d.data());
+  populateOrderSelect();
+  if(currentOrder){
+    const updated=orders.find(o=>o.id===currentOrder.id);
+    if(updated&&document.querySelector('#page-2.active')) {
+      currentOrder=updated;
+      renderScanPage();
+    }
+  }
+});
+window.addEventListener('DOMContentLoaded',()=>{
+  showPage(1);
+  $('btn-start').onclick=goToScan;
+  $('btn-submit-order').onclick=submitOrder;
+});
+</script>
+<style>
+:root{--blue:#1a73e8;--red:#e53935;--green:#43a047;--orange:#fb8c00;--bg:#f0f4f8;--card:#fff;--border:#dadce0;--txt:#202124}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+header h1{font-size:16px;font-weight:700}
+.step-bar{display:flex;background:#fff;border-bottom:2px solid var(--border);overflow:hidden}
+.step{flex:1;text-align:center;padding:10px 4px;font-size:12px;font-weight:600;color:#aaa;border-bottom:3px solid transparent;transition:.2s}
+.step.active{color:var(--blue);border-bottom-color:var(--blue);background:#f0f7ff}
+.step.done{color:var(--green);background:#f0fff4}
+.page{display:none;padding:16px;max-width:600px;margin:auto}
+.page.active{display:block}
+.card{background:var(--card);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+h2{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:12px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;transition:.15s}
+.btn:active{transform:scale(.97)}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-gray{background:#e0e0e0;color:#333}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:5px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+.badge{display:inline-block;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700}
+.badge-urgent{background:var(--red);color:#fff}
+.badge-real{background:#6a1b9a;color:#fff}
+.item-card{background:#f8f9ff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.item-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.item-name{font-size:13px;font-weight:600}
+.item-sku{font-size:11px;color:#888;font-family:monospace}
+.item-location{font-size:12px;color:#555;margin-top:4px}
+.item-progress{margin-top:8px}
+.progress-bar{background:#e0e0e0;border-radius:4px;height:8px;overflow:hidden;margin-top:4px}
+.progress-fill{background:var(--blue);height:100%;border-radius:4px;transition:.3s}
+.progress-fill.done{background:var(--green)}
+.scan-count{font-size:12px;color:#666;margin-top:4px}
+.scan-input-row{display:flex;gap:8px;margin-top:8px}
+.scan-input-row input{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px}
+.scan-input-row button{padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700}
+#alert-bar{position:fixed;top:56px;left:0;right:0;z-index:99;transform:translateY(-100%);transition:.3s;padding:10px 16px;font-size:14px;font-weight:600;text-align:center;display:none}
+#alert-bar.show{transform:translateY(0);display:block}
+#alert-bar.success{background:#43a047;color:#fff}
+#alert-bar.error{background:#e53935;color:#fff}
+#alert-bar.warn{background:#fb8c00;color:#fff}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:12px;padding:24px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.modal-box h3{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:12px}
+.modal-actions{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.summary-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
+.success-box{text-align:center;padding:30px 20px}
+.tracking-display{background:#f0f7ff;border:2px solid var(--blue);border-radius:8px;padding:16px;text-align:center;margin:16px 0}
+.tracking-num{font-size:22px;font-weight:700;letter-spacing:2px;color:var(--blue);word-break:break-all}
+</style>
+</head>
+<body>
+<header>
+  <h1>📦 WMS — Passer une commande</h1>
+  <div style="display:flex;align-items:center;gap:4px;font-size:12px">
+    <span id="conn-dot" style="width:10px;height:10px;border-radius:50%;background:#f44;display:inline-block;transition:.3s"></span>
+    <span id="conn-txt">Connexion…</span>
+  </div>
+</header>
+
+<div class="step-bar">
+  <div class="step active" id="step-1">1 Choisir</div>
+  <div class="step" id="step-2">2 Scanner</div>
+  <div class="step" id="step-3">3 Infos</div>
+  <div class="step" id="step-4">4 Envoyé !</div>
+</div>
+
+<div id="alert-bar"></div>
+
+<!-- PAGE 1 -->
+<div id="page-1" class="page active">
+  <div class="card">
+    <h2>Choisissez votre commande</h2>
+    <div class="form-group">
+      <label>Mon prénom et nom</label>
+      <input type="text" id="user-name" placeholder="Ex: Jean Dupont" autocomplete="name"/>
+    </div>
+    <div class="form-group">
+      <label>Sélectionner la commande</label>
+      <select id="order-select" onchange="previewOrder()">
+        <option value="">Chargement…</option>
+      </select>
+    </div>
+    <div id="order-preview" style="display:none;margin-top:12px"></div>
+    <button class="btn btn-blue" id="btn-start" style="margin-top:16px">Commencer la préparation</button>
+  </div>
+</div>
+
+<!-- PAGE 2 -->
+<div id="page-2" class="page">
+  <div class="card" id="order-info-bar"></div>
+  <div id="items-container"></div>
+  <button class="btn btn-blue" id="btn-validate" onclick="confirmValidation()" disabled>Valider la commande</button>
+  <button class="btn btn-gray" onclick="goToPage(1)">Retour</button>
+</div>
+
+<!-- PAGE 3 -->
+<div id="page-3" class="page">
+  <div class="card">
+    <h2>Informations de livraison</h2>
+    <div class="form-group"><label>Service / Bureau</label><input type="text" id="info-service" placeholder="Ex: Logistique"/></div>
+    <div class="form-group"><label>Lieu de livraison</label><input type="text" id="info-lieu" placeholder="Ex: Quai 3 - Entrepôt B"/></div>
+    <div class="form-group"><label>Commentaire (optionnel)</label><textarea id="info-comment" rows="3" placeholder="Remarques" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px"></textarea></div>
+    <button class="btn btn-green" id="btn-submit-order">Envoyer la demande</button>
+    <button class="btn btn-gray" onclick="goToPage(2)">Retour</button>
+  </div>
+</div>
+
+<!-- PAGE 4 -->
+<div id="page-4" class="page">
+  <div class="card success-box">
+    <div style="font-size:60px;margin-bottom:16px">✅</div>
+    <h2 style="font-size:20px;text-align:center">Demande envoyée !</h2>
+    <p style="text-align:center;color:#666;margin-top:8px">Votre commande a bien été transmise aux caristes.</p>
+    <div class="tracking-display">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;margin-bottom:4px">Numéro de tracking</div>
+      <div class="tracking-num" id="confirm-tracking"></div>
+      <svg id="confirm-barcode" style="max-width:100%;margin-top:8px"></svg>
+    </div>
+    <p style="text-align:center;color:#666;font-size:13px">Conservez ce numéro pour suivre votre demande.</p>
+    <button class="btn btn-blue" onclick="resetApp()" style="margin-top:20px">Nouvelle demande</button>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMATION -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-box">
+    <h3>Confirmer la validation</h3>
+    <div id="modal-confirm-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-green" onclick="doValidateOrder()">Oui, je confirme</button>
+      <button class="btn btn-gray" onclick="closeConfirmModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL URGENT -->
+<div class="modal-overlay" id="modal-urgent">
+  <div class="modal-box" style="text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">🚨</div>
+    <h3 style="color:var(--red)">COMMANDE URGENTE !</h3>
+    <p id="modal-urgent-msg" style="margin-top:8px;color:#555"></p>
+    <div class="modal-actions">
+      <button class="btn btn-red" onclick="document.getElementById('modal-urgent').classList.remove('show')">OK, j'ai compris</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Connexion indicator basique
+window.addEventListener('online',()=>{document.getElementById('conn-dot').style.background='#4caf50';document.getElementById('conn-txt').textContent='Connecté';});
+window.addEventListener('offline',()=>{document.getElementById('conn-dot').style.background='#f44';document.getElementById('conn-txt').textContent='Déconnecté';});
+setTimeout(()=>{document.getElementById('conn-dot').style.background='#4caf50';document.getElementById('conn-txt').textContent='Connecté';},2000);
+</script>
+</body>
+</html>
