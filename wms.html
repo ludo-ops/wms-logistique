@@ -368,7 +368,18 @@
       });
     }
 
-    async function startCamera() {
+    window.resetScanner = function() {
+      window.stopCamera();
+      state.scannerOrderId = '';
+      state.scannerUser = '';
+      state.scannerScanned = {};
+      state.scannerStep = 1;
+      showScanBlock(1);
+      if ($('scan-user')) $('scan-user').value = '';
+      if ($('scan-order')) { fillScanOrders(); }
+    };
+
+    window.startCamera = async function startCamera() {
       const video = $('cam-video');
       const btnStart = $('btn-start-cam');
       const btnStop = $('btn-stop-cam');
@@ -397,7 +408,7 @@
       }
     }
 
-    function stopCamera() {
+    window.stopCamera = function stopCamera() {
       if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
       if (camInterval) { clearInterval(camInterval); camInterval = null; }
       const btnStart = $('btn-start-cam');
@@ -409,7 +420,7 @@
     let lastScannedSku = '';
     let lastScannedTime = 0;
 
-    function processCameraScan(sku) {
+    window.processCameraScan = function processCameraScan(sku) {
       const now = Date.now();
       if (sku === lastScannedSku && now - lastScannedTime < 2000) return;
       lastScannedSku = sku;
@@ -427,7 +438,7 @@
       renderScanner();
       const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
       if (complete) {
-        stopCamera();
+        window.stopCamera();
         state.scannerStep = 3;
         showScanBlock(3);
         toast('Tous les articles scannés ! Passe à la vérification.');
@@ -603,7 +614,7 @@
       if (!allOk) return toast('La double vérification a détecté un écart', 'err');
       state.scannerStep = 4;
       showScanBlock(4);
-      stopCamera();
+      window.stopCamera();
       const durationSec = (Date.now() - state.scannerStart) / 1000;
       const badge = state.scannerProblems === 0 ? 'Sans faute' : (state.scannerProblems <= 2 ? 'Bon contrôle' : 'À revoir');
       const updatedItems = order.items.map(i => ({ ...i, scanned: state.scannerScanned[i.sku] || 0 }));
@@ -763,18 +774,9 @@
       $('order-filter').addEventListener('change', renderOrders);
       $('start-scan').addEventListener('click', window.startScanner);
       document.addEventListener('click', e => {
-        if (e.target.id === 'btn-start-cam') startCamera();
-        if (e.target.id === 'btn-stop-cam') stopCamera();
-        if (e.target.id === 'btn-new-scan') {
-          stopCamera();
-          state.scannerOrderId = '';
-          state.scannerUser = '';
-          state.scannerScanned = {};
-          state.scannerStep = 1;
-          showScanBlock(1);
-          $('scan-user').value = '';
-          $('scan-order').value = '';
-        }
+        if (e.target.id === 'btn-start-cam') window.startCamera();
+        if (e.target.id === 'btn-stop-cam') window.stopCamera();
+
       });
       $('back-picking').addEventListener('click', window.backToPicking);
       $('validate-double').addEventListener('click', window.validateDoubleCheck);
@@ -994,8 +996,8 @@
                   <div class="scan-result-flash" id="scan-flash">✓ Scanné !</div>
                 </div>
                 <div class="row" style="margin-top:10px">
-                  <button class="btn blue" id="btn-start-cam">Activer la caméra</button>
-                  <button class="btn gray" id="btn-stop-cam" style="display:none">Arrêter</button>
+                  <button class="btn blue" id="btn-start-cam" onclick="window.startCamera()">📷 Activer la caméra</button>
+                  <button class="btn gray" id="btn-stop-cam" style="display:none" onclick="window.stopCamera()">⏹ Arrêter</button>
                 </div>
               </div>
             </div>
@@ -1020,7 +1022,7 @@
           <div class="card">
             <h2>Résultat</h2>
             <div id="scan-feedback" class="sub">Le résumé apparaîtra ici après validation.</div>
-            <button class="btn blue" style="margin-top:14px" id="btn-new-scan">Nouvelle préparation</button>
+            <button class="btn blue" style="margin-top:14px" id="btn-new-scan" onclick="window.resetScanner()">🔄 Nouvelle préparation</button>
           </div>
         </div>
 
