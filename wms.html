@@ -990,16 +990,14 @@
               <div id="scan-current"></div>
             </div>
             <div>
-              <div class="card" style="margin-bottom:12px">
-                <h2>📷 Caméra — Scan en direct</h2>
-                <p class="sub" style="margin-bottom:10px">Pointe sur le QR code ou code-barre de l'article à préparer.</p>
-                <div class="cam-wrap">
-                  <video id="cam-video" autoplay playsinline muted></video>
-                  <canvas id="cam-canvas"></canvas>
-                  <div class="scan-result-flash" id="scan-flash">✓ Scanné !</div>
-                </div>
-                <p id="cam-status" class="sub" style="margin-top:8px;text-align:center">Démarrage de la caméra...</p>
-                <button class="btn gray" style="margin-top:8px" onclick="window.stopCamera()">⏹ Arrêter la caméra</button>
+              <div class="card">
+                <h2>📷 Caméra</h2>
+                <video id="cam-video" autoplay playsinline muted
+                  style="width:100%;border-radius:12px;background:#000;display:block;min-height:240px;border:3px solid #1a73e8">
+                </video>
+                <canvas id="cam-canvas" style="display:none"></canvas>
+                <div id="scan-flash" style="text-align:center;font-weight:800;font-size:18px;color:#2e7d32;margin-top:8px;min-height:26px"></div>
+                <p id="cam-status" style="text-align:center;color:#666;font-size:13px;margin-top:4px">En attente de la caméra...</p>
               </div>
             </div>
           </div>
