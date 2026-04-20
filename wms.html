@@ -682,7 +682,11 @@
       toast('20 commandes démo rechargées !');
     }
 
-        async function saveArticle() {
+    function clearArticleForm() {
+      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
+    }
+
+    async function saveArticle() {
       const sku = normalizeSku($('art-sku').value);
       const name = $('art-name').value.trim();
       const qty = Number($('art-qty').value || 0);
@@ -695,6 +699,7 @@
       clearArticleForm();
       toast('Article enregistré');
     }
+
     async function createOrder() {
       const client = $('order-client').value.trim();
       const shippingMode = $('order-shipping').value;
@@ -730,10 +735,7 @@
       $('order-trap').checked = false;
       toast('Commande créée');
     }
-    function clearArticleForm() {
-      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
-      $('art-sku').readOnly = false;
-    }
+
     function renderQR() {
       const holder = $('qrcode');
       holder.innerHTML = '';
@@ -741,7 +743,6 @@
       $('qr-url').textContent = url;
       new QRCode(holder, { text: url, width: 220, height: 220, colorDark: '#1a73e8', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
     }
-
     window.saveArticle = saveArticle;
     window.createOrder = createOrder;
     window.clearArticleForm = clearArticleForm;
@@ -751,21 +752,14 @@
         window.addEventListener('DOMContentLoaded', async () => {
       await seedIfNeeded();
       document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-      $('save-article').addEventListener('click', saveArticle);
-      $('clear-article').addEventListener('click', clearArticleForm);
-      $('create-order').addEventListener('click', createOrder);
-      $('reset-demo').addEventListener('click', resetDemo);
       $('article-search').addEventListener('input', renderArticles);
       $('order-search').addEventListener('input', renderOrders);
       $('order-filter').addEventListener('change', renderOrders);
-      $('start-scan').addEventListener('click', window.startScanner);
       document.addEventListener('click', e => {
         if (e.target.id === 'btn-start-cam') window.startCamera();
         if (e.target.id === 'btn-stop-cam') window.stopCamera();
 
       });
-      $('back-picking').addEventListener('click', window.backToPicking);
-      $('validate-double').addEventListener('click', window.validateDoubleCheck);
       $('close-modal').addEventListener('click', () => $('modal').classList.remove('open'));
 
       onSnapshot(collection(db, 'articles'), snap => {
@@ -877,7 +871,7 @@
         <div class="card">
           <h2>Actions rapides</h2>
           <p class="sub">Le reset supprime uniquement les commandes de démo puis en régénère.</p>
-          <button class="btn orange" id="reset-demo">Réinitialiser la démo</button>
+          <button class="btn orange" id="reset-demo" onclick="window.resetDemo()">Réinitialiser la démo</button>
         </div>
       </div>
       <div class="grid-2">
@@ -907,7 +901,7 @@
           <label><input type="checkbox" id="order-real" /> Commande réelle / urgente</label>
           <label><input type="checkbox" id="order-trap" /> Commande piège</label>
         </div>
-        <div style="margin-top:14px"><button class="btn blue" id="create-order">Créer la commande</button></div>
+        <div style="margin-top:14px"><button class="btn blue" id="create-order" onclick="window.createOrder()">Créer la commande</button></div>
       </div>
       <div class="card">
         <div class="row" style="margin-bottom:12px">
@@ -935,7 +929,7 @@
           <div class="field"><label>Seuil</label><input id="art-threshold" type="number" min="0" /></div>
           <div class="field"><label>Prix</label><input id="art-price" type="number" min="0" step="0.01" /></div>
         </div>
-        <div class="row" style="margin-top:14px"><button class="btn blue" id="save-article">Enregistrer</button><button class="btn gray" id="clear-article">Effacer</button></div>
+        <div class="row" style="margin-top:14px"><button class="btn blue" id="save-article" onclick="window.saveArticle()">Enregistrer</button><button class="btn gray" id="clear-article" onclick="window.clearArticleForm()">Effacer</button></div>
       </div>
       <div class="card">
         <div class="row" style="margin-bottom:12px"><div class="field"><label>Recherche</label><input id="article-search" placeholder="SKU, nom, emplacement" /></div></div>
@@ -997,7 +991,7 @@
               <div id="scan-order-items"></div>
             </div>
           </div>
-          <div style="margin-top:14px"><button class="btn blue" id="start-scan">Commencer la préparation</button></div>
+          <div style="margin-top:14px"><button class="btn blue" id="start-scan" onclick="window.startScanner()">Commencer la préparation</button></div>
         </div>
 
         <!-- ÉTAPE 2 : Picking -->
@@ -1022,8 +1016,8 @@
             <p class="sub">Vérifie chaque article avant de valider définitivement.</p>
             <div id="double-check-list"></div>
             <div class="row" style="margin-top:14px">
-              <button class="btn gray" id="back-picking">← Revenir corriger</button>
-              <button class="btn green" id="validate-double">✅ Valider la commande</button>
+              <button class="btn gray" id="back-picking" onclick="window.backToPicking()">← Revenir corriger</button>
+              <button class="btn green" id="validate-double" onclick="window.validateDoubleCheck()">✅ Valider la commande</button>
             </div>
           </div>
         </div>
