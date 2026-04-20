@@ -428,227 +428,35 @@
     window.processCameraScan = function processCameraScan(sku) {
       const now = Date.now();
       if (now - lastScannedTime < 800) return;
-      lastScannedSku = sku;
       lastScannedTime = now;
+
       const order = currentScannerOrder();
       if (!order) return;
+
       const item = order.items.find(i => i.sku === sku);
-      if (!item) { toast('Article ' + sku + ' non trouvé dans cette commande', 'err'); return; }
-      const current = state.scannerScanned[sku] || 0;
-      if (current >= item.qty) { toast('Quantité déjà complète pour ' + sku, 'err'); return; }
-      state.scannerScanned[sku] = current + 1;
-      state.scannerResolved += 1;
-      // Flash vert sur la vidéo
+      if (!item) { toast('❌ ' + sku + ' non trouvé dans cette commande', 'err'); return; }
+
+      // Toujours autoriser le scan même si déjà à la bonne quantité (erreur volontaire)
+      state.scannerScanned[sku] = (state.scannerScanned[sku] || 0) + 1;
+
+      // Flash vert sur vidéo
       const greenFlash = $('scan-green-flash');
       const skuOverlay = $('scan-sku-overlay');
       if (greenFlash) {
         greenFlash.style.display = 'block';
         skuOverlay.style.display = 'block';
-        skuOverlay.textContent = '✓ ' + sku;
-        setTimeout(() => {
-          greenFlash.style.display = 'none';
-          skuOverlay.style.display = 'none';
-        }, 700);
+        skuOverlay.textContent = '✓ ' + sku + ' → ' + state.scannerScanned[sku] + '/' + item.qty;
+        setTimeout(() => { greenFlash.style.display = 'none'; skuOverlay.style.display = 'none'; }, 700);
       }
-      const flash = $('scan-flash');
-      if (flash) { flash.textContent = '✓ ' + sku + ' scanné !'; }
-      renderScanner();
-      const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
-      if (complete) {
-        window.stopCamera();
-        state.scannerStep = 3;
-        showScanBlock(3);
-        toast('Tous les articles scannés ! Passe à la vérification.');
-      }
-    }
 
-        function renderScanner() {
-      const order = currentScannerOrder();
-      $('scanner-step-1').classList.toggle('active', state.scannerStep === 1);
-      $('scanner-step-2').classList.toggle('active', state.scannerStep === 2);
-      $('scanner-step-3').classList.toggle('active', state.scannerStep === 3);
-      $('scanner-step-4').classList.toggle('active', state.scannerStep === 4);
-      if (!order) {
-        $('scan-current').innerHTML = '<div class="empty-inline">Sélectionne d’abord une commande à traiter.</div>';
-        $('double-check-list').innerHTML = '';
-        $('scan-feedback').innerHTML = '';
-        return;
-      }
-      const lines = order.items.map(i => {
-        const got = state.scannerScanned[i.sku] || 0;
-        const pct = Math.min(100, Math.round((got / i.qty) * 100));
-        return `
-          <div class="scan-card">
-            <div><strong>${i.name}</strong><br><small><code>${i.sku}</code> · ${i.location || '—'}</small></div>
-            <div class="scan-actions">
-              <input id="input-${i.sku}" placeholder="Scanner ou saisir ${i.sku}" />
-              <button class="mini blue" onclick="window.scanSku('${i.sku}')">Valider</button>
-            </div>
-            <div class="progress-text">${got}/${i.qty}</div>
-            <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
-          </div>
-        `;
-      }).join('');
-      $('scan-current').innerHTML = `
-        <div class="scanner-head"><strong>${order.id}</strong> — ${order.client}<span>${order.shippingMode || '—'}</span></div>
-        ${lines}
-      `;
-      const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
-      $('double-check-list').innerHTML = `
-        <div style="margin-bottom:14px;padding:12px;border-radius:12px;background:${allOk ? '#e8f5e9' : '#fff3e0'};border:2px solid ${allOk ? '#2e7d32' : '#ef6c00'};text-align:center;font-weight:800;font-size:16px;color:${allOk ? '#2e7d32' : '#ef6c00'}">
-          ${allOk ? '✅ Tout est correct — tu peux valider !' : '⚠️ Vérifie les articles en rouge avant de valider'}
-        </div>
-        ${order.items.map(i => {
-          const got = state.scannerScanned[i.sku] || 0;
-          const ok = got === i.qty;
-          const pct = Math.min(100, Math.round((got / i.qty) * 100));
-          return `
-            <div style="padding:12px;margin-bottom:10px;border-radius:14px;background:${ok ? '#e8f5e9' : '#fdecea'};border:2px solid ${ok ? '#2e7d32' : '#d93025'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                <div>
-                  <div style="font-weight:800;font-size:15px">${i.name}</div>
-                  <div style="font-size:12px;color:#555"><code>${i.sku}</code> · ${i.location || '—'}</div>
-                </div>
-                <div style="font-size:22px;font-weight:900;color:${ok ? '#2e7d32' : '#d93025'}">${ok ? '✅' : '❌'}</div>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-                <span>Scanné : <strong>${got}</strong></span>
-                <span>Attendu : <strong>${i.qty}</strong></span>
-                <span style="color:${ok ? '#2e7d32' : '#d93025'};font-weight:800">${ok ? 'OK' : got > i.qty ? 'TROP (+' + (got - i.qty) + ')' : 'MANQUE (' + (i.qty - got) + ')'}</span>
-              </div>
-              <div style="height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${ok ? '#2e7d32' : '#d93025'};border-radius:999px;transition:.3s"></div>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      `;
-    }
+      renderScanProgress();
 
-    async function saveArticle() {
-      const sku = normalizeSku($('art-sku').value);
-      const name = $('art-name').value.trim();
-      const qty = Number($('art-qty').value || 0);
-      const location = $('art-location').value.trim();
-      const category = $('art-category').value.trim() || 'Divers';
-      const threshold = Number($('art-threshold').value || 0);
-      const price = Number($('art-price').value || 0);
-      if (!sku || !name) return toast('SKU et nom requis', 'err');
-      await setDoc(doc(db, 'articles', sku), { sku, name, qty, location, category, threshold, price }, { merge: true });
-      clearArticleForm();
-      toast('Article enregistré');
-    }
-
-    function clearArticleForm() {
-      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
-      $('art-sku').readOnly = false;
-    }
-
-    async function saveMovement(sku, type, qty, by, reason) {
-      const art = state.articles.find(a => a.sku === sku);
-      if (!art) return;
-      await addDoc(collection(db, 'stock_history'), { sku, name: art.name, type, qty, by, reason, date: new Date().toISOString() });
-    }
-
-    async function createOrder() {
-      const client = $('order-client').value.trim();
-      const shippingMode = $('order-shipping').value;
-      const issueCase = $('order-case').value;
-      const assignedTo = $('order-assigned').value.trim();
-      const isReal = $('order-real').checked;
-      const isTrap = $('order-trap').checked;
-      const sku = $('order-item-sku').value;
-      const qty = Number($('order-item-qty').value || 1);
-      if (!client || !sku) return toast('Client et article requis', 'err');
-      const art = state.articles.find(a => a.sku === sku);
-      if (!art) return toast('Article introuvable', 'err');
-      const id = uid('CMD');
-      await setDoc(doc(db, 'orders', id), {
-        id,
-        client,
-        tracking: tracking(),
-        status: 'pending',
-        urgent: isReal,
-        isReal,
-        isTrap,
-        assignedTo,
-        shippingMode,
-        flowStep: 'Réception',
-        issueCase,
-        date: new Date().toISOString(),
-        source: 'manual',
-        items: [{ sku: art.sku, name: art.name, qty, scanned: 0, location: art.location, price: art.price || 0 }]
-      });
-      ['order-client','order-assigned'].forEach(id => $(id).value = '');
-      $('order-item-qty').value = '1';
-      $('order-real').checked = false;
-      $('order-trap').checked = false;
-      toast('Commande créée');
-    }
-
-    async function resetDemo() {
-      if (!confirm('Réinitialiser les commandes de démo ?')) return;
-      const demoOrders = state.orders.filter(o => !o.isReal);
-      for (const o of demoOrders) await deleteDoc(doc(db, 'orders', o.id));
-      for (let i = 1; i <= 20; i++) {
-        const order = buildRandomOrder(i, state.articles.length ? state.articles : articleCatalog());
-        if (!order.isReal) await setDoc(doc(db, 'orders', order.id), order);
-      }
-      toast('Démo réinitialisée');
-    }
-
-    window.startScanner = async function startScanner() {
-      const name = $('scan-user').value.trim();
-      const orderId = $('scan-order').value;
-      if (!name || !orderId) return toast('Nom complet et commande requis', 'err');
-      const order = state.orders.find(o => o.id === orderId);
-      if (!order) return toast('Commande introuvable', 'err');
-      state.scannerUser = name;
-      state.scannerOrderId = orderId;
-      state.scannerStart = Date.now();
-      state.scannerExpected = order.items;
-      state.scannerScanned = Object.fromEntries(order.items.map(i => [i.sku, i.scanned || 0]));
-      state.scannerProblems = 0;
-      state.scannerResolved = 0;
-      state.scannerStep = 2;
-      const docId = order._docId || orderId;
-      await updateDoc(doc(db, 'orders', docId), { assignedTo: name, status: 'inprogress', flowStep: 'Préparation' });
-      renderScanner();
-      renderOrders();
-      toast('Préparation lancée');
-    }
-
-    window.scanSku = function(expectedSku) {
-      const order = currentScannerOrder();
-      if (!order) return;
-      const input = $('input-' + expectedSku);
-      const value = normalizeSku(input.value);
-      if (value !== expectedSku) {
-        state.scannerProblems += 1;
-        input.value = '';
-        toast(`Mauvais SKU : attendu ${expectedSku}`, 'err');
-        renderScanner();
-        return;
-      }
-      const item = order.items.find(i => i.sku === expectedSku);
-      const current = state.scannerScanned[expectedSku] || 0;
-      if (current >= item.qty) {
-        state.scannerProblems += 1;
-        input.value = '';
-        toast('Quantité déjà complète', 'err');
-        return;
-      }
-      state.scannerScanned[expectedSku] = current + 1;
-      state.scannerResolved += 1;
-      input.value = '';
-      renderScanner();
-      const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
-      if (complete) {
-        state.scannerStep = 3;
-        renderScanner();
-        toast('Passe à la double vérification');
-      }
+      // Vérifier si tout est scanné (au moins qty pour chaque article)
+      const allDone = order.items.every(i => (state.scannerScanned[i.sku] || 0) >= i.qty);
+      if (allDone) toast('✅ Tous les articles atteints ! Tu peux passer à la vérification.', 'ok');
     };
+
+    
 
     window.validateDoubleCheck = async function validateDoubleCheck() {
       const order = currentScannerOrder();
