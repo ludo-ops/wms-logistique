@@ -263,7 +263,7 @@
       `).join('');
       tbody.innerHTML = rows || '<tr><td colspan="8" class="empty">Aucun article</td></tr>';
       $('order-item-sku').innerHTML = '<option value="">Choisir un article</option>' + state.articles.map(a => `<option value="${a.sku}">${a.sku} — ${a.name}</option>`).join('');
-      $('scan-order').innerHTML = '<option value="">Choisir une commande</option>' + state.orders.filter(o => ['pending','inprogress'].includes(o.status)).map(o => `<option value="${o.id}">${o.id} — ${o.client}</option>`).join('');
+      window.fillScanOrders();
     }
 
     function renderMovements() {
@@ -608,7 +608,20 @@
       toast('Mouvement enregistré');
     };
 
-    window.addEventListener('DOMContentLoaded', async () => {
+    function fillScanOrders() {
+      const sel = $('scan-order');
+      if (!sel) return;
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Choisir une commande</option>' +
+        state.orders
+          .filter(o => ['pending','inprogress'].includes(o.status))
+          .sort((a,b) => a.id.localeCompare(b.id))
+          .map(o => `<option value="${o.id}" ${o.id === current ? 'selected' : ''}>${o.id} — ${o.client}${o.urgent ? ' ⚡' : ''}</option>`)
+          .join('');
+    }
+    window.fillScanOrders = fillScanOrders;
+
+        window.addEventListener('DOMContentLoaded', async () => {
       await seedIfNeeded();
       document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
       $('save-article').addEventListener('click', saveArticle);
@@ -634,6 +647,7 @@
         renderDashboardUrgent();
         renderStats();
         renderScanner();
+        fillScanOrders();
       });
       onSnapshot(query(collection(db, 'stock_history'), orderBy('date', 'desc')), snap => {
         state.movements = snap.docs.map(d => d.data());
