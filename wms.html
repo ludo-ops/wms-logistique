@@ -250,7 +250,7 @@
       const tbody = $('articles-body');
       const filtered = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku));
       const rows = filtered.map(a => `
-        <tr>
+        <tr style="cursor:pointer" onclick="window.showArticleQR('${a.sku}')">
           <td><code>${a.sku}</code></td>
           <td>${a.name}</td>
           <td class="${a.qty <= a.threshold ? 'danger' : ''}">${a.qty}</td>
@@ -503,6 +503,7 @@
 
     function clearArticleForm() {
       ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
+      $('art-sku').readOnly = false;
     }
 
     async function saveMovement(sku, type, qty, by, reason) {
@@ -687,7 +688,27 @@
       $('modal').classList.add('open');
     };
 
-    window.printArticle = function(sku) {
+    window.showArticleQR = function(sku) {
+      const a = state.articles.find(x => x.sku === sku);
+      if (!a) return;
+      const modal = $('modal-qr');
+      const title = $('modal-qr-title');
+      const sub = $('modal-qr-sub');
+      const qrDiv = $('modal-qr-code');
+      const bcSvg = $('modal-qr-bc');
+      title.textContent = a.name;
+      title.dataset.sku = sku;
+      sub.textContent = sku + ' · ' + (a.location || '—') + ' · Stock : ' + a.qty;
+      qrDiv.innerHTML = '';
+      bcSvg.innerHTML = '';
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        try { new QRCode(qrDiv, { text: sku, width: 200, height: 200, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e) {}
+        try { JsBarcode(bcSvg, sku, { format:'CODE128', width:2.5, height:70, displayValue:true, fontSize:16, margin:6 }); } catch(e) {}
+      }, 80);
+    };
+
+        window.printArticle = function(sku) {
       const a = state.articles.find(x => x.sku === sku);
       if (!a) return;
       const zone = $('print-zone');
@@ -714,14 +735,19 @@
         window.editArticle = function(sku) {
       const a = state.articles.find(x => x.sku === sku);
       if (!a) return;
-      $('art-sku').value = a.sku;
-      $('art-name').value = a.name;
-      $('art-qty').value = a.qty;
-      $('art-location').value = a.location || '';
-      $('art-category').value = a.category || '';
-      $('art-threshold').value = a.threshold || 0;
-      $('art-price').value = a.price || 0;
       switchTab('articles');
+      setTimeout(() => {
+        $('art-sku').value = a.sku;
+        $('art-sku').readOnly = true;
+        $('art-name').value = a.name;
+        $('art-qty').value = a.qty;
+        $('art-location').value = a.location || '';
+        $('art-category').value = a.category || '';
+        $('art-threshold').value = a.threshold || 0;
+        $('art-price').value = a.price || 0;
+        $('art-sku').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        $('art-name').focus();
+      }, 50);
     };
 
     window.removeArticle = async function(sku) {
@@ -753,7 +779,31 @@
       toast('Mouvement enregistré');
     };
 
-    function fillScanOrders() {
+    window.previewScanOrder = function() {
+      const orderId = $('scan-order').value;
+      const preview = $('scan-order-preview');
+      const itemsDiv = $('scan-order-items');
+      if (!orderId) { preview.style.display = 'none'; return; }
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) { preview.style.display = 'none'; return; }
+      preview.style.display = 'block';
+      const scanned = state.scannerOrderId === orderId ? state.scannerScanned : {};
+      itemsDiv.innerHTML = order.items.map(i => {
+        const got = scanned[i.sku] || i.scanned || 0;
+        const pct = Math.min(100, Math.round((got / i.qty) * 100));
+        return `
+          <div style="padding:10px 0;border-bottom:1px solid #eef2f7">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><strong>${i.name}</strong><br><small><code>${i.sku}</code> · ${i.location || '—'}</small></div>
+              <span style="font-weight:800;color:${got>=i.qty?'#2e7d32':'#1a73e8'}">${got}/${i.qty}</span>
+            </div>
+            <div class="progress" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${got>=i.qty?'#2e7d32':'#1a73e8'}"></div></div>
+          </div>
+        `;
+      }).join('');
+    };
+
+        function fillScanOrders() {
       const sel = $('scan-order');
       if (!sel) return;
       const current = sel.value;
@@ -798,6 +848,7 @@
         renderStats();
         renderScanner();
         fillScanOrders();
+      if ($('scan-order') && $('scan-order').value) window.previewScanOrder();
       });
       onSnapshot(query(collection(db, 'stock_history'), orderBy('date', 'desc')), snap => {
         state.movements = snap.docs.map(d => d.data());
@@ -990,7 +1041,13 @@
         <div id="scan-block-1">
           <div class="row">
             <div class="field"><label>Nom et prénom</label><input id="scan-user" placeholder="Ex : Luca Martin" /></div>
-            <div class="field"><label>Commande à préparer</label><select id="scan-order"></select></div>
+            <div class="field"><label>Commande à préparer</label><select id="scan-order" onchange="window.previewScanOrder()"></select></div>
+          </div>
+          <div id="scan-order-preview" style="margin-top:14px;display:none">
+            <div class="card" style="margin-bottom:12px;border:2px solid #1a73e8">
+              <h2>Articles à préparer</h2>
+              <div id="scan-order-items"></div>
+            </div>
           </div>
           <div style="margin-top:14px"><button class="btn blue" id="start-scan">Commencer la préparation</button></div>
         </div>
@@ -1069,7 +1126,22 @@
 
   <div id="print-zone"></div>
 
-  <div id="modal" class="modal">
+  <!-- Modale QR Article -->
+  <div id="modal-qr" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:95;padding:20px">
+    <div style="background:#fff;border-radius:20px;padding:28px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+      <h3 id="modal-qr-title" style="color:#1a73e8;margin-bottom:6px;font-size:20px"></h3>
+      <p id="modal-qr-sub" style="color:#6b7280;font-size:13px;margin-bottom:16px"></p>
+      <div id="modal-qr-code" style="display:inline-block;padding:12px;background:#fff;border-radius:12px;border:2px solid #e2e8f0;margin-bottom:12px"></div>
+      <br>
+      <svg id="modal-qr-bc" style="max-width:320px;width:100%"></svg>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:center">
+        <button class="btn green" onclick="window.printArticle(document.getElementById('modal-qr-title').dataset.sku)">🖨️ Imprimer</button>
+        <button class="btn gray" onclick="document.getElementById('modal-qr').style.display='none'">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+    <div id="modal" class="modal">
     <div class="modal-box">
       <div class="modal-top"><h3>Détail commande</h3><button class="close-btn" id="close-modal">✕</button></div>
       <div id="modal-body"></div>
