@@ -381,13 +381,14 @@
 
     window.startCamera = async function startCamera() {
       const video = $('cam-video');
-      const btnStart = $('btn-start-cam');
-      const btnStop = $('btn-stop-cam');
+      const status = $('cam-status');
+      if (camStream) return;
       try {
-        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (status) status.textContent = 'Accès à la caméra en cours...';
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
         video.srcObject = camStream;
-        btnStart.style.display = 'none';
-        btnStop.style.display = 'block';
+        await video.play();
+        if (status) status.textContent = '🟢 Caméra active — pointe sur un QR code ou code-barre';
         const canvas = $('cam-canvas');
         const ctx = canvas.getContext('2d');
         camInterval = setInterval(() => {
@@ -404,6 +405,8 @@
           }
         }, 300);
       } catch(e) {
+        const status = $('cam-status');
+        if (status) status.textContent = '❌ Caméra non accessible : ' + e.message;
         toast('Caméra non accessible : ' + e.message, 'err');
       }
     }
@@ -849,7 +852,7 @@
     }
     #print-zone{display:none}
     .cam-wrap{position:relative;width:100%;max-width:400px;margin:0 auto}
-    .cam-wrap video{width:100%;border-radius:14px;border:2px solid var(--blue)}
+    .cam-wrap video{width:100%;border-radius:14px;border:2px solid var(--blue);display:block;background:#000;min-height:200px}
     .cam-wrap canvas{display:none}
     .scan-result-flash{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#2e7d32;color:#fff;padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;opacity:0;transition:.3s}
     .scan-result-flash.show{opacity:1}
@@ -988,17 +991,15 @@
             </div>
             <div>
               <div class="card" style="margin-bottom:12px">
-                <h2>📷 Scan caméra</h2>
-                <p class="sub" style="margin-bottom:10px">Pointe la caméra sur le QR code ou code-barre de l'article.</p>
+                <h2>📷 Caméra — Scan en direct</h2>
+                <p class="sub" style="margin-bottom:10px">Pointe sur le QR code ou code-barre de l'article à préparer.</p>
                 <div class="cam-wrap">
                   <video id="cam-video" autoplay playsinline muted></video>
                   <canvas id="cam-canvas"></canvas>
                   <div class="scan-result-flash" id="scan-flash">✓ Scanné !</div>
                 </div>
-                <div class="row" style="margin-top:10px">
-                  <button class="btn blue" id="btn-start-cam" onclick="window.startCamera()">📷 Activer la caméra</button>
-                  <button class="btn gray" id="btn-stop-cam" style="display:none" onclick="window.stopCamera()">⏹ Arrêter</button>
-                </div>
+                <p id="cam-status" class="sub" style="margin-top:8px;text-align:center">Démarrage de la caméra...</p>
+                <button class="btn gray" style="margin-top:8px" onclick="window.stopCamera()">⏹ Arrêter la caméra</button>
               </div>
             </div>
           </div>
