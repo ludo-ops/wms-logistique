@@ -665,6 +665,89 @@
     }
     window.fillScanOrders = fillScanOrders;
 
+        async function resetDemo() {
+      if (!confirm('Supprimer toutes les commandes démo et en recréer 20 nouvelles ?')) return;
+      // Supprimer commandes démo existantes
+      const snap = await getDocs(collection(db, 'orders'));
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (!data.isReal) await deleteDoc(doc(db, 'orders', d.id));
+      }
+      // Recréer 20 commandes démo
+      const articles = state.articles.length ? state.articles : articleCatalog();
+      for (let i = 1; i <= 20; i++) {
+        const order = buildRandomOrder(i, articles);
+        await setDoc(doc(db, 'orders', order.id), order);
+      }
+      toast('20 commandes démo rechargées !');
+    }
+
+        async function saveArticle() {
+      const sku = normalizeSku($('art-sku').value);
+      const name = $('art-name').value.trim();
+      const qty = Number($('art-qty').value || 0);
+      const location = $('art-location').value.trim();
+      const category = $('art-category').value.trim() || 'Divers';
+      const threshold = Number($('art-threshold').value || 0);
+      const price = Number($('art-price').value || 0);
+      if (!sku || !name) return toast('SKU et nom requis', 'err');
+      await setDoc(doc(db, 'articles', sku), { sku, name, qty, location, category, threshold, price }, { merge: true });
+      clearArticleForm();
+      toast('Article enregistré');
+    }
+    async function createOrder() {
+      const client = $('order-client').value.trim();
+      const shippingMode = $('order-shipping').value;
+      const issueCase = $('order-case').value;
+      const assignedTo = $('order-assigned').value.trim();
+      const isReal = $('order-real').checked;
+      const isTrap = $('order-trap').checked;
+      const sku = $('order-item-sku').value;
+      const qty = Number($('order-item-qty').value || 1);
+      if (!client || !sku) return toast('Client et article requis', 'err');
+      const art = state.articles.find(a => a.sku === sku);
+      if (!art) return toast('Article introuvable', 'err');
+      const id = uid('CMD');
+      await setDoc(doc(db, 'orders', id), {
+        id,
+        client,
+        tracking: tracking(),
+        status: 'pending',
+        urgent: isReal,
+        isReal,
+        isTrap,
+        assignedTo,
+        shippingMode,
+        flowStep: 'Réception',
+        issueCase,
+        date: new Date().toISOString(),
+        source: 'manual',
+        items: [{ sku: art.sku, name: art.name, qty, scanned: 0, location: art.location, price: art.price || 0 }]
+      });
+      ['order-client','order-assigned'].forEach(id => $(id).value = '');
+      $('order-item-qty').value = '1';
+      $('order-real').checked = false;
+      $('order-trap').checked = false;
+      toast('Commande créée');
+    }
+    function clearArticleForm() {
+      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
+      $('art-sku').readOnly = false;
+    }
+    function renderQR() {
+      const holder = $('qrcode');
+      holder.innerHTML = '';
+      const url = new URL('./demande.html', window.location.href).href;
+      $('qr-url').textContent = url;
+      new QRCode(holder, { text: url, width: 220, height: 220, colorDark: '#1a73e8', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+    }
+
+    window.saveArticle = saveArticle;
+    window.createOrder = createOrder;
+    window.clearArticleForm = clearArticleForm;
+    window.renderQR = renderQR;
+    window.resetDemo = resetDemo;
+
         window.addEventListener('DOMContentLoaded', async () => {
       await seedIfNeeded();
       document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
