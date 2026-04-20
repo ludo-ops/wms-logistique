@@ -427,7 +427,7 @@
 
     window.processCameraScan = function processCameraScan(sku) {
       const now = Date.now();
-      if (sku === lastScannedSku && now - lastScannedTime < 2000) return;
+      if (now - lastScannedTime < 800) return;
       lastScannedSku = sku;
       lastScannedTime = now;
       const order = currentScannerOrder();
@@ -438,8 +438,20 @@
       if (current >= item.qty) { toast('Quantité déjà complète pour ' + sku, 'err'); return; }
       state.scannerScanned[sku] = current + 1;
       state.scannerResolved += 1;
+      // Flash vert sur la vidéo
+      const greenFlash = $('scan-green-flash');
+      const skuOverlay = $('scan-sku-overlay');
+      if (greenFlash) {
+        greenFlash.style.display = 'block';
+        skuOverlay.style.display = 'block';
+        skuOverlay.textContent = '✓ ' + sku;
+        setTimeout(() => {
+          greenFlash.style.display = 'none';
+          skuOverlay.style.display = 'none';
+        }, 700);
+      }
       const flash = $('scan-flash');
-      if (flash) { flash.textContent = '✓ ' + sku; flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+      if (flash) { flash.textContent = '✓ ' + sku + ' scanné !'; }
       renderScanner();
       const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
       if (complete) {
@@ -481,11 +493,36 @@
         <div class="scanner-head"><strong>${order.id}</strong> — ${order.client}<span>${order.shippingMode || '—'}</span></div>
         ${lines}
       `;
-      $('double-check-list').innerHTML = order.items.map(i => {
-        const got = state.scannerScanned[i.sku] || 0;
-        const ok = got === i.qty;
-        return `<div class="check-row ${ok ? 'ok' : 'ko'}"><span><code>${i.sku}</code> ${i.name}</span><strong>${got}/${i.qty}</strong></div>`;
-      }).join('');
+      const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
+      $('double-check-list').innerHTML = `
+        <div style="margin-bottom:14px;padding:12px;border-radius:12px;background:${allOk ? '#e8f5e9' : '#fff3e0'};border:2px solid ${allOk ? '#2e7d32' : '#ef6c00'};text-align:center;font-weight:800;font-size:16px;color:${allOk ? '#2e7d32' : '#ef6c00'}">
+          ${allOk ? '✅ Tout est correct — tu peux valider !' : '⚠️ Vérifie les articles en rouge avant de valider'}
+        </div>
+        ${order.items.map(i => {
+          const got = state.scannerScanned[i.sku] || 0;
+          const ok = got === i.qty;
+          const pct = Math.min(100, Math.round((got / i.qty) * 100));
+          return `
+            <div style="padding:12px;margin-bottom:10px;border-radius:14px;background:${ok ? '#e8f5e9' : '#fdecea'};border:2px solid ${ok ? '#2e7d32' : '#d93025'}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div>
+                  <div style="font-weight:800;font-size:15px">${i.name}</div>
+                  <div style="font-size:12px;color:#555"><code>${i.sku}</code> · ${i.location || '—'}</div>
+                </div>
+                <div style="font-size:22px;font-weight:900;color:${ok ? '#2e7d32' : '#d93025'}">${ok ? '✅' : '❌'}</div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                <span>Scanné : <strong>${got}</strong></span>
+                <span>Attendu : <strong>${i.qty}</strong></span>
+                <span style="color:${ok ? '#2e7d32' : '#d93025'};font-weight:800">${ok ? 'OK' : got > i.qty ? 'TROP (+' + (got - i.qty) + ')' : 'MANQUE (' + (i.qty - got) + ')'}</span>
+              </div>
+              <div style="height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${ok ? '#2e7d32' : '#d93025'};border-radius:999px;transition:.3s"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      `;
     }
 
     async function saveArticle() {
@@ -1024,11 +1061,27 @@
       <!-- CAMÉRA TOUJOURS VISIBLE -->
       <div class="card" style="margin-bottom:16px">
         <h2>📷 Caméra — Scan en direct</h2>
-        <video id="cam-video" autoplay playsinline muted
-          style="width:100%;max-width:500px;display:block;margin:0 auto;border-radius:14px;background:#000;min-height:260px;border:3px solid #1a73e8">
-        </video>
+        <div style="position:relative;max-width:500px;margin:0 auto">
+          <video id="cam-video" autoplay playsinline muted
+            style="width:100%;display:block;border-radius:14px;background:#000;min-height:260px;border:3px solid #1a73e8">
+          </video>
+          <div id="scan-green-flash" style="
+            position:absolute;inset:0;border-radius:14px;
+            background:rgba(46,125,50,0.45);
+            display:none;pointer-events:none;
+            border:4px solid #2e7d32;
+            transition:opacity .2s;
+          "></div>
+          <div id="scan-sku-overlay" style="
+            position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+            background:#2e7d32;color:#fff;
+            padding:8px 20px;border-radius:999px;
+            font-weight:900;font-size:16px;
+            display:none;white-space:nowrap;
+          "></div>
+        </div>
         <canvas id="cam-canvas" style="display:none"></canvas>
-        <div id="scan-flash" style="text-align:center;font-weight:800;font-size:20px;color:#2e7d32;margin-top:10px;min-height:28px"></div>
+        <div id="scan-flash" style="text-align:center;font-weight:800;font-size:18px;color:#2e7d32;margin-top:10px;min-height:28px"></div>
         <p id="cam-status" style="text-align:center;color:#666;font-size:13px;margin-top:4px">Caméra inactive</p>
       </div>
 
