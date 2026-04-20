@@ -455,7 +455,8 @@
       state.scannerProblems = 0;
       state.scannerResolved = 0;
       state.scannerStep = 2;
-      await updateDoc(doc(db, 'orders', orderId), { assignedTo: name, status: 'inprogress', flowStep: 'Préparation' });
+      const docId = order._docId || orderId;
+      await updateDoc(doc(db, 'orders', docId), { assignedTo: name, status: 'inprogress', flowStep: 'Préparation' });
       renderScanner();
       renderOrders();
       toast('Préparation lancée');
@@ -502,7 +503,7 @@
       const durationSec = (Date.now() - state.scannerStart) / 1000;
       const badge = state.scannerProblems === 0 ? 'Sans faute' : (state.scannerProblems <= 2 ? 'Bon contrôle' : 'À revoir');
       const updatedItems = order.items.map(i => ({ ...i, scanned: state.scannerScanned[i.sku] || 0 }));
-      await updateDoc(doc(db, 'orders', order.id), { items: updatedItems, status: 'completed', flowStep: 'Expédition', assignedTo: state.scannerUser });
+      await updateDoc(doc(db, 'orders', order._docId || order.id), { items: updatedItems, status: 'completed', flowStep: 'Expédition', assignedTo: state.scannerUser });
       for (const i of updatedItems) {
         const art = state.articles.find(a => a.sku === i.sku);
         if (art) {
@@ -588,7 +589,8 @@
 
     window.removeOrder = async function(id) {
       if (!confirm(`Supprimer la commande ${id} ?`)) return;
-      await deleteDoc(doc(db, 'orders', id));
+      const orderToDelete = state.orders.find(o => o.id === id);
+      await deleteDoc(doc(db, 'orders', orderToDelete?._docId || id));
       toast('Commande supprimée');
     };
 
@@ -642,7 +644,7 @@
         renderStats();
       });
       onSnapshot(collection(db, 'orders'), snap => {
-        state.orders = snap.docs.map(d => d.data());
+        state.orders = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
         renderOrders();
         renderDashboardUrgent();
         renderStats();
