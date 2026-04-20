@@ -441,7 +441,7 @@
       toast('Démo réinitialisée');
     }
 
-    async function startScanner() {
+    window.startScanner = async function startScanner() {
       const name = $('scan-user').value.trim();
       const orderId = $('scan-order').value;
       if (!name || !orderId) return toast('Nom complet et commande requis', 'err');
@@ -493,7 +493,7 @@
       }
     };
 
-    async function validateDoubleCheck() {
+    window.validateDoubleCheck = async function validateDoubleCheck() {
       const order = currentScannerOrder();
       if (!order) return;
       const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
@@ -534,7 +534,7 @@
       toast('Commande terminée');
     }
 
-    function backToPicking() {
+    window.backToPicking = function backToPicking() {
       state.scannerStep = 2;
       renderScanner();
     }
@@ -631,9 +631,9 @@
       $('article-search').addEventListener('input', renderArticles);
       $('order-search').addEventListener('input', renderOrders);
       $('order-filter').addEventListener('change', renderOrders);
-      $('start-scan').addEventListener('click', startScanner);
-      $('back-picking').addEventListener('click', backToPicking);
-      $('validate-double').addEventListener('click', validateDoubleCheck);
+      $('start-scan').addEventListener('click', window.startScanner);
+      $('back-picking').addEventListener('click', window.backToPicking);
+      $('validate-double').addEventListener('click', window.validateDoubleCheck);
       $('close-modal').addEventListener('click', () => $('modal').classList.remove('open'));
 
       onSnapshot(collection(db, 'articles'), snap => {
