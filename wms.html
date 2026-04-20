@@ -1,13 +1,17 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WMS - Interface Formateur</title>
+  <title>WMS Logistique - Gestion</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import {
+      getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+      onSnapshot, serverTimestamp, query, orderBy
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
@@ -21,17 +25,48 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let articles = [];
-    let orders = [];
+    const state = {
+      articles: [],
+      orders: [],
+      movements: [],
+      feedbacks: [],
+      scannerOrderId: '',
+      scannerUser: '',
+      scannerStart: null,
+      scannerExpected: [],
+      scannerScanned: {},
+      scannerProblems: 0,
+      scannerResolved: 0,
+      scannerStep: 1,
+    };
 
     const $ = (id) => document.getElementById(id);
+    const money = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
 
     function uid(prefix='ID') {
-      return prefix + '-' + Date.now() + '-' + Math.floor(Math.random()*1000);
+      return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+    }
+
+    function randomPick(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
     function tracking() {
       return 'TRK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    }
+
+    function formatDate(value) {
+      if (!value) return '—';
+      try {
+        const d = value?.toDate ? value.toDate() : new Date(value);
+        return d.toLocaleString('fr-BE');
+      } catch {
+        return '—';
+      }
     }
 
     function normalizeSku(v) {
@@ -40,128 +75,226 @@
       return m ? `${m[1]}-${m[2].padStart(3,'0')}` : v.toUpperCase().trim();
     }
 
-    function defaultArticles() {
+    function articleCatalog() {
       return [
-        { sku:'LOG-001', name:'Papier A4 rame 500f', qty:120, location:'Allée A - Étagère 1', category:'Fournitures', threshold:10 },
-        { sku:'LOG-002', name:'Stylos bleus boîte x20', qty:85, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10 },
-        { sku:'LOG-003', name:'Stylos rouges boîte x20', qty:60, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10 },
-        { sku:'LOG-004', name:'Classeurs A4 lot x5', qty:40, location:'Allée A - Étagère 3', category:'Fournitures', threshold:5 },
-        { sku:'LOG-005', name:'Cahiers quadrillés lot x10', qty:55, location:'Allée A - Étagère 4', category:'Fournitures', threshold:5 },
-        { sku:'LOG-006', name:'Scotch emballage rouleau', qty:200, location:'Allée B - Étagère 1', category:'Emballage', threshold:20 },
-        { sku:'LOG-007', name:'Carton 40x30 cm', qty:150, location:'Allée B - Étagère 2', category:'Emballage', threshold:20 },
-        { sku:'LOG-016', name:'Étiquettes autocollantes rouleau', qty:300, location:'Allée C - Étagère 1', category:'Fournitures', threshold:30 },
-        { sku:'LOG-019', name:'Gants de manutention paire', qty:30, location:'Allée C - Étagère 3', category:'EPI', threshold:5 },
-        { sku:'LOG-020', name:'Casque sécurité chantier', qty:12, location:'Allée C - Étagère 4', category:'EPI', threshold:3 },
-        { sku:'LOG-022', name:'Chaussures sécurité p42', qty:0, location:'Allée D - Étagère 1', category:'EPI', threshold:2 },
-        { sku:'LOG-030', name:'Extincteur poudre 2kg', qty:0, location:'Allée E - Étagère 3', category:'Sécurité', threshold:1 },
-        { sku:'MAT-001', name:'Bloc béton 33.19', qty:500, location:'Zone F - Rack 1', category:'Matériaux', threshold:50 },
-        { sku:'MAT-006', name:'Brique Vandersanden baroque', qty:1000, location:'Zone G - Rack 1', category:'Matériaux', threshold:100 }
+        { sku:'LOG-001', name:'Papier A4 rame 500f', qty:120, location:'Allée A - Étagère 1', category:'Fournitures', threshold:10, price:5.5 },
+        { sku:'LOG-002', name:'Stylos bleus boîte x20', qty:85, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10, price:7.9 },
+        { sku:'LOG-003', name:'Stylos rouges boîte x20', qty:60, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10, price:7.9 },
+        { sku:'LOG-004', name:'Classeurs A4 lot x5', qty:40, location:'Allée A - Étagère 3', category:'Fournitures', threshold:5, price:12.5 },
+        { sku:'LOG-005', name:'Cahiers quadrillés lot x10', qty:55, location:'Allée A - Étagère 4', category:'Fournitures', threshold:5, price:9.9 },
+        { sku:'LOG-006', name:'Scotch emballage rouleau', qty:200, location:'Allée B - Étagère 1', category:'Emballage', threshold:20, price:2.2 },
+        { sku:'LOG-007', name:'Carton 40x30 cm', qty:150, location:'Allée B - Étagère 2', category:'Emballage', threshold:20, price:1.8 },
+        { sku:'LOG-008', name:'Film bulle 10m', qty:70, location:'Allée B - Étagère 3', category:'Emballage', threshold:10, price:4.5 },
+        { sku:'LOG-016', name:'Étiquettes autocollantes rouleau', qty:300, location:'Allée C - Étagère 1', category:'Fournitures', threshold:30, price:8.4 },
+        { sku:'LOG-019', name:'Gants de manutention paire', qty:30, location:'Allée C - Étagère 3', category:'EPI', threshold:5, price:6.5 },
+        { sku:'LOG-020', name:'Casque sécurité chantier', qty:12, location:'Allée C - Étagère 4', category:'EPI', threshold:3, price:18.9 },
+        { sku:'LOG-022', name:'Chaussures sécurité p42', qty:9, location:'Allée D - Étagère 1', category:'EPI', threshold:2, price:52 },
+        { sku:'MAT-001', name:'Bloc béton 33.19', qty:500, location:'Zone F - Rack 1', category:'Matériaux', threshold:50, price:2.5 },
+        { sku:'MAT-006', name:'Brique Vandersanden baroque', qty:1000, location:'Zone G - Rack 1', category:'Matériaux', threshold:100, price:1.35 }
       ];
     }
 
-    function defaultOrders() {
-      const now = new Date().toISOString();
-      return [
-        { id:'CMD-001', client:'Martin', tracking:tracking(), status:'pending', urgent:false, isReal:false, assignedTo:'', date:now, items:[{sku:'LOG-001',name:'Papier A4 rame 500f',qty:2,scanned:0,location:'Allée A - Étagère 1'},{sku:'LOG-007',name:'Carton 40x30 cm',qty:3,scanned:0,location:'Allée B - Étagère 2'}] },
-        { id:'CMD-002', client:'Bernard', tracking:tracking(), status:'pending', urgent:false, isReal:false, assignedTo:'', date:now, items:[{sku:'LOG-002',name:'Stylos bleus boîte x20',qty:4,scanned:0,location:'Allée A - Étagère 2'}] },
-        { id:'CMD-003', client:'Dubois', tracking:tracking(), status:'pending', urgent:true, isReal:true, assignedTo:'', date:now, items:[{sku:'LOG-019',name:'Gants de manutention paire',qty:2,scanned:0,location:'Allée C - Étagère 3'}] },
-        { id:'CMD-TRAP1', client:'Fontaine', tracking:tracking(), status:'pending', urgent:false, isReal:false, assignedTo:'', date:now, items:[{sku:'LOG-001',name:'Papier A4 rame 500f',qty:2,scanned:0,location:'Allée A - Étagère 1'},{sku:'LOG-030',name:'Extincteur poudre 2kg',qty:1,scanned:0,location:'Allée E - Étagère 3'}] },
-        { id:'CMD-TRAP2', client:'Mercier', tracking:tracking(), status:'pending', urgent:false, isReal:false, assignedTo:'', date:now, items:[{sku:'LOG-022',name:'Chaussures sécurité p42',qty:1,scanned:0,location:'Allée D - Étagère 1'},{sku:'LOG-002',name:'Stylos bleus boîte x20',qty:3,scanned:0,location:'Allée A - Étagère 2'}] }
-      ];
+    function casePool() {
+      return ['Aucun', 'Produit manquant', 'Stock incorrect', 'Adresse invalide', 'Article remplacé', 'Retour client', 'Annulation partielle', 'Erreur de saisie', 'Multi-colis'];
+    }
+
+    function shippingPool() {
+      return ['Standard', 'Express', 'Retrait dépôt', 'Interne'];
+    }
+
+    function clientsPool() {
+      return ['Martin', 'Bernard', 'Dubois', 'Mercier', 'Fontaine', 'Simon', 'Leroy', 'Legrand', 'Petit', 'Meunier', 'Gilson', 'Piron', 'Dupont', 'Colson'];
+    }
+
+    function employeesPool() {
+      return ['Luca', 'Nadia', 'Sami', 'Julie', 'Noah', 'Emma', 'Yanis', 'Sarah'];
+    }
+
+    function buildRandomOrder(index, articles) {
+      const count = randomInt(1, 4);
+      const picks = [...articles].sort(() => Math.random() - 0.5).slice(0, count);
+      const items = picks.map(a => ({
+        sku: a.sku,
+        name: a.name,
+        qty: randomInt(1, Math.min(4, Math.max(1, a.qty > 20 ? 4 : 2))),
+        scanned: 0,
+        location: a.location,
+        price: a.price || 0
+      }));
+      const isTrap = index % 5 === 0;
+      const isReal = index % 4 === 0;
+      const urgent = isReal || index % 6 === 0;
+      const statuses = ['pending','pending','pending','inprogress'];
+      return {
+        id: `CMD-${String(index).padStart(3,'0')}`,
+        client: randomPick(clientsPool()),
+        tracking: tracking(),
+        status: randomPick(statuses),
+        urgent,
+        isReal,
+        isTrap,
+        assignedTo: Math.random() > 0.65 ? randomPick(employeesPool()) + ' Test' : '',
+        date: new Date(Date.now() - randomInt(0, 8) * 86400000).toISOString(),
+        shippingMode: randomPick(shippingPool()),
+        flowStep: randomPick(['Réception','Contrôle','Préparation','Expédition','Support']),
+        issueCase: isTrap ? randomPick(casePool().slice(1)) : randomPick(casePool()),
+        items,
+        source: 'seed'
+      };
     }
 
     async function seedIfNeeded() {
       const metaRef = doc(db, 'meta', 'settings');
-      const metaSnap = await getDoc(metaRef);
-      if (metaSnap.exists()) return;
-      for (const a of defaultArticles()) await setDoc(doc(db, 'articles', a.sku), a);
-      for (const o of defaultOrders()) await setDoc(doc(db, 'orders', o.id), o);
+      const snap = await getDoc(metaRef);
+      if (snap.exists()) return;
+      const articles = articleCatalog();
+      for (const a of articles) await setDoc(doc(db, 'articles', a.sku), a);
+      for (let i = 1; i <= 20; i++) {
+        const order = buildRandomOrder(i, articles);
+        await setDoc(doc(db, 'orders', order.id), order);
+      }
       await setDoc(metaRef, { seeded: true, createdAt: new Date().toISOString() });
     }
 
     function statusLabel(s) {
-      return ({ pending:'En attente', inprogress:'En cours', completed:'Terminée' })[s] || s;
+      return ({ pending:'En attente', inprogress:'En cours', completed:'Terminée', cancelled:'Annulée', issue:'Litige' })[s] || s;
     }
 
-    function badgeType(o) {
-      return `${o.urgent ? '<span class="badge urgent">URGENT</span>' : ''}${o.isReal ? '<span class="badge real">Réelle</span>' : '<span class="badge demo">Démo</span>'}`;
+    function toast(message, type='ok') {
+      const el = $('toast');
+      el.textContent = message;
+      el.className = `toast show ${type}`;
+      clearTimeout(window._toast);
+      window._toast = setTimeout(() => el.className = 'toast', 3000);
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+      if (name === 'qr') renderQR();
+      if (name === 'scanner') renderScanner();
     }
 
     function renderStats() {
-      $('stat-total').textContent = orders.length;
-      $('stat-pending').textContent = orders.filter(o => o.status === 'pending').length;
-      $('stat-progress').textContent = orders.filter(o => o.status === 'inprogress').length;
-      $('stat-done').textContent = orders.filter(o => o.status === 'completed').length;
-      $('stat-urgent').textContent = orders.filter(o => o.urgent && o.status !== 'completed').length;
-      $('stat-articles').textContent = articles.length;
+      $('st-total').textContent = state.orders.length;
+      $('st-pending').textContent = state.orders.filter(o => o.status === 'pending').length;
+      $('st-progress').textContent = state.orders.filter(o => o.status === 'inprogress').length;
+      $('st-done').textContent = state.orders.filter(o => o.status === 'completed').length;
+      $('st-urgent').textContent = state.orders.filter(o => o.urgent && o.status !== 'completed').length;
+      $('st-articles').textContent = state.articles.length;
+    }
+
+    function orderProgress(order) {
+      const total = order.items.reduce((s, i) => s + Number(i.qty || 0), 0);
+      const scanned = order.items.reduce((s, i) => s + Number(i.scanned || 0), 0);
+      return { total, scanned, pct: total ? Math.round((scanned / total) * 100) : 0 };
+    }
+
+    function renderDashboardUrgent() {
+      const urgent = state.orders.filter(o => o.urgent && o.status !== 'completed');
+      $('urgent-list').innerHTML = urgent.length ? urgent.map(o => `
+        <div class="mini-row">
+          <div>
+            <strong>${o.id}</strong> — ${o.client}<br>
+            <small>${o.shippingMode || '—'} · ${statusLabel(o.status)}</small>
+          </div>
+          <button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button>
+        </div>
+      `).join('') : '<div class="empty-inline">Aucune commande urgente active.</div>';
+    }
+
+    function renderOrders() {
+      const q = $('order-search').value.toLowerCase().trim();
+      const filter = $('order-filter').value;
+      const tbody = $('orders-body');
+      const rows = state.orders.filter(o => {
+        const okQ = !q || o.id.toLowerCase().includes(q) || o.client.toLowerCase().includes(q) || (o.assignedTo || '').toLowerCase().includes(q);
+        const okF = !filter || (filter === 'urgent' ? o.urgent : o.status === filter);
+        return okQ && okF;
+      }).sort((a,b) => a.id.localeCompare(b.id)).map(o => {
+        const p = orderProgress(o);
+        return `
+          <tr>
+            <td><code>${o.id}</code></td>
+            <td>${o.client}</td>
+            <td>${formatDate(o.date)}</td>
+            <td>${o.shippingMode || '—'}</td>
+            <td><span class="badge ${o.status}">${statusLabel(o.status)}</span></td>
+            <td>${o.assignedTo || '—'}</td>
+            <td>
+              ${o.urgent ? '<span class="badge urgent">URGENT</span>' : ''}
+              ${o.isReal ? '<span class="badge real">Réelle</span>' : '<span class="badge demo">Démo</span>'}
+              ${o.isTrap ? '<span class="badge trap">Piège</span>' : ''}
+            </td>
+            <td>${o.flowStep || 'Réception'}</td>
+            <td>${o.issueCase || 'Aucun'}</td>
+            <td>
+              <div class="progress-text">${p.scanned}/${p.total}</div>
+              <div class="progress"><div class="progress-fill" style="width:${p.pct}%"></div></div>
+            </td>
+            <td class="actions-cell">
+              <button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button>
+              <button class="mini green" onclick="window.loadScannerOrder('${o.id}')">Scanner</button>
+              <button class="mini red" onclick="window.removeOrder('${o.id}')">Supprimer</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      tbody.innerHTML = rows || '<tr><td colspan="11" class="empty">Aucune commande trouvée</td></tr>';
     }
 
     function renderArticles() {
       const q = $('article-search').value.toLowerCase().trim();
       const tbody = $('articles-body');
-      const rows = articles
-        .filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location||'').toLowerCase().includes(q))
-        .sort((a,b) => a.sku.localeCompare(b.sku))
-        .map(a => `
-          <tr>
-            <td><code>${a.sku}</code></td>
-            <td>${a.name}</td>
-            <td class="${a.qty <= a.threshold ? 'danger-text' : ''}">${a.qty}</td>
-            <td>${a.location || ''}</td>
-            <td>${a.category || ''}</td>
-            <td>${a.threshold ?? 0}</td>
-            <td class="actions-cell">
-              <button class="mini blue" onclick="window.editArticle('${a.sku}')">Modifier</button>
-              <button class="mini red" onclick="window.removeArticle('${a.sku}')">Supprimer</button>
-            </td>
-          </tr>
-        `).join('');
-      tbody.innerHTML = rows || `<tr><td colspan="7" class="empty">Aucun article trouvé</td></tr>`;
+      const rows = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku)).map(a => `
+        <tr>
+          <td><code>${a.sku}</code></td>
+          <td>${a.name}</td>
+          <td class="${a.qty <= a.threshold ? 'danger' : ''}">${a.qty}</td>
+          <td>${a.location || '—'}</td>
+          <td>${a.category || '—'}</td>
+          <td>${a.threshold ?? 0}</td>
+          <td>${money.format(a.price || 0)}</td>
+          <td class="actions-cell">
+            <button class="mini blue" onclick="window.editArticle('${a.sku}')">Modifier</button>
+            <button class="mini orange" onclick="window.stockMove('${a.sku}')">Entrée/Sortie</button>
+            <button class="mini red" onclick="window.removeArticle('${a.sku}')">Supprimer</button>
+          </td>
+        </tr>
+      `).join('');
+      tbody.innerHTML = rows || '<tr><td colspan="8" class="empty">Aucun article</td></tr>';
+      $('order-item-sku').innerHTML = '<option value="">Choisir un article</option>' + state.articles.map(a => `<option value="${a.sku}">${a.sku} — ${a.name}</option>`).join('');
+      $('scan-order').innerHTML = '<option value="">Choisir une commande</option>' + state.orders.filter(o => ['pending','inprogress'].includes(o.status)).map(o => `<option value="${o.id}">${o.id} — ${o.client}</option>`).join('');
     }
 
-    function renderOrders() {
-      const q = $('order-search').value.toLowerCase().trim();
-      const f = $('order-filter').value;
-      const tbody = $('orders-body');
-      const rows = orders
-        .filter(o => {
-          const okQ = !q || o.id.toLowerCase().includes(q) || o.client.toLowerCase().includes(q) || o.tracking.toLowerCase().includes(q);
-          const okF = !f || (f === 'urgent' ? o.urgent : o.status === f);
-          return okQ && okF;
-        })
-        .sort((a,b) => a.id.localeCompare(b.id))
-        .map(o => {
-          const total = o.items.reduce((s,i) => s + Number(i.qty || 0), 0);
-          const scanned = o.items.reduce((s,i) => s + Number(i.scanned || 0), 0);
-          const pct = total ? Math.round((scanned / total) * 100) : 0;
-          return `
-            <tr>
-              <td><code>${o.id}</code></td>
-              <td>${o.client}</td>
-              <td><code>${o.tracking}</code></td>
-              <td><span class="badge ${o.status}">${statusLabel(o.status)}</span></td>
-              <td>${badgeType(o)}</td>
-              <td>${o.items.length}</td>
-              <td>
-                <div class="progress-wrap">
-                  <div class="progress-label">${scanned}/${total}</div>
-                  <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
-                </div>
-              </td>
-              <td class="actions-cell">
-                <button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button>
-                <button class="mini red" onclick="window.removeOrder('${o.id}')">Supprimer</button>
-              </td>
-            </tr>
-          `;
-        }).join('');
-      tbody.innerHTML = rows || `<tr><td colspan="8" class="empty">Aucune commande trouvée</td></tr>`;
+    function renderMovements() {
+      const rows = [...state.movements].slice(0, 15).map(m => `
+        <tr>
+          <td>${formatDate(m.date)}</td>
+          <td><code>${m.sku}</code></td>
+          <td>${m.name}</td>
+          <td><span class="badge ${m.type === 'in' ? 'completed' : 'urgent'}">${m.type === 'in' ? 'Entrée' : 'Sortie'}</span></td>
+          <td>${m.qty}</td>
+          <td>${m.by || '—'}</td>
+          <td>${m.reason || '—'}</td>
+        </tr>
+      `).join('');
+      $('moves-body').innerHTML = rows || '<tr><td colspan="7" class="empty">Aucun mouvement enregistré</td></tr>';
     }
 
-    function renderUrgentBox() {
-      const box = $('urgent-box');
-      const urgent = orders.filter(o => o.urgent && o.status !== 'completed');
-      box.innerHTML = urgent.length ? urgent.map(o => `<div class="urgent-row"><span><strong>${o.id}</strong> — ${o.client}</span><button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button></div>`).join('') : '<div class="empty-inline">Aucune commande urgente active.</div>';
+    function renderFeedbacks() {
+      const rows = [...state.feedbacks].slice(0, 10).map(f => `
+        <tr>
+          <td>${formatDate(f.date)}</td>
+          <td>${f.user}</td>
+          <td><code>${f.orderId}</code></td>
+          <td>${Math.round(f.durationSec || 0)} sec</td>
+          <td>${f.errors || 0}</td>
+          <td>${f.resolved || 0}</td>
+          <td>${f.badge || '—'}</td>
+        </tr>
+      `).join('');
+      $('feedbacks-body').innerHTML = rows || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
     }
 
     function renderQR() {
@@ -169,22 +302,49 @@
       holder.innerHTML = '';
       const url = new URL('./demande.html', window.location.href).href;
       $('qr-url').textContent = url;
-      new QRCode(holder, {
-        text: url,
-        width: 220,
-        height: 220,
-        colorDark: '#1a73e8',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
-      });
+      new QRCode(holder, { text: url, width: 220, height: 220, colorDark: '#1a73e8', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
     }
 
-    function toast(message, type='ok') {
-      const el = $('toast');
-      el.textContent = message;
-      el.className = `toast show ${type}`;
-      clearTimeout(window._toastTimer);
-      window._toastTimer = setTimeout(() => el.className = 'toast', 2600);
+    function currentScannerOrder() {
+      return state.orders.find(o => o.id === state.scannerOrderId);
+    }
+
+    function renderScanner() {
+      const order = currentScannerOrder();
+      $('scanner-step-1').classList.toggle('active', state.scannerStep === 1);
+      $('scanner-step-2').classList.toggle('active', state.scannerStep === 2);
+      $('scanner-step-3').classList.toggle('active', state.scannerStep === 3);
+      $('scanner-step-4').classList.toggle('active', state.scannerStep === 4);
+      if (!order) {
+        $('scan-current').innerHTML = '<div class="empty-inline">Sélectionne d’abord une commande à traiter.</div>';
+        $('double-check-list').innerHTML = '';
+        $('scan-feedback').innerHTML = '';
+        return;
+      }
+      const lines = order.items.map(i => {
+        const got = state.scannerScanned[i.sku] || 0;
+        const pct = Math.min(100, Math.round((got / i.qty) * 100));
+        return `
+          <div class="scan-card">
+            <div><strong>${i.name}</strong><br><small><code>${i.sku}</code> · ${i.location || '—'}</small></div>
+            <div class="scan-actions">
+              <input id="input-${i.sku}" placeholder="Scanner ou saisir ${i.sku}" />
+              <button class="mini blue" onclick="window.scanSku('${i.sku}')">Valider</button>
+            </div>
+            <div class="progress-text">${got}/${i.qty}</div>
+            <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
+          </div>
+        `;
+      }).join('');
+      $('scan-current').innerHTML = `
+        <div class="scanner-head"><strong>${order.id}</strong> — ${order.client}<span>${order.shippingMode || '—'}</span></div>
+        ${lines}
+      `;
+      $('double-check-list').innerHTML = order.items.map(i => {
+        const got = state.scannerScanned[i.sku] || 0;
+        const ok = got === i.qty;
+        return `<div class="check-row ${ok ? 'ok' : 'ko'}"><span><code>${i.sku}</code> ${i.name}</span><strong>${got}/${i.qty}</strong></div>`;
+      }).join('');
     }
 
     async function saveArticle() {
@@ -194,25 +354,35 @@
       const location = $('art-location').value.trim();
       const category = $('art-category').value.trim() || 'Divers';
       const threshold = Number($('art-threshold').value || 0);
+      const price = Number($('art-price').value || 0);
       if (!sku || !name) return toast('SKU et nom requis', 'err');
-      await setDoc(doc(db, 'articles', sku), { sku, name, qty, location, category, threshold });
-      $('art-sku').value = '';
-      $('art-name').value = '';
-      $('art-qty').value = '';
-      $('art-location').value = '';
-      $('art-category').value = '';
-      $('art-threshold').value = '';
-      toast('Article enregistré', 'ok');
+      await setDoc(doc(db, 'articles', sku), { sku, name, qty, location, category, threshold, price }, { merge: true });
+      clearArticleForm();
+      toast('Article enregistré');
+    }
+
+    function clearArticleForm() {
+      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
+    }
+
+    async function saveMovement(sku, type, qty, by, reason) {
+      const art = state.articles.find(a => a.sku === sku);
+      if (!art) return;
+      await addDoc(collection(db, 'stock_history'), { sku, name: art.name, type, qty, by, reason, date: new Date().toISOString() });
     }
 
     async function createOrder() {
-      const client = $('new-client').value.trim();
-      const sku = $('new-sku').value;
-      const qty = Number($('new-qty').value || 1);
-      const isReal = $('new-type').value === 'real';
+      const client = $('order-client').value.trim();
+      const shippingMode = $('order-shipping').value;
+      const issueCase = $('order-case').value;
+      const assignedTo = $('order-assigned').value.trim();
+      const isReal = $('order-real').checked;
+      const isTrap = $('order-trap').checked;
+      const sku = $('order-item-sku').value;
+      const qty = Number($('order-item-qty').value || 1);
       if (!client || !sku) return toast('Client et article requis', 'err');
-      const a = articles.find(x => x.sku === sku);
-      if (!a) return toast('Article introuvable', 'err');
+      const art = state.articles.find(a => a.sku === sku);
+      if (!art) return toast('Article introuvable', 'err');
       const id = uid('CMD');
       await setDoc(doc(db, 'orders', id), {
         id,
@@ -221,394 +391,344 @@
         status: 'pending',
         urgent: isReal,
         isReal,
-        assignedTo: '',
+        isTrap,
+        assignedTo,
+        shippingMode,
+        flowStep: 'Réception',
+        issueCase,
         date: new Date().toISOString(),
-        items: [{ sku:a.sku, name:a.name, qty, scanned:0, location:a.location || '' }]
+        source: 'manual',
+        items: [{ sku: art.sku, name: art.name, qty, scanned: 0, location: art.location, price: art.price || 0 }]
       });
-      $('new-client').value = '';
-      $('new-qty').value = '1';
-      $('new-type').value = 'demo';
-      toast('Commande créée', 'ok');
+      ['order-client','order-assigned'].forEach(id => $(id).value = '');
+      $('order-item-qty').value = '1';
+      $('order-real').checked = false;
+      $('order-trap').checked = false;
+      toast('Commande créée');
     }
 
     async function resetDemo() {
       if (!confirm('Réinitialiser les commandes de démo ?')) return;
-      const demos = orders.filter(o => !o.isReal);
-      for (const d of demos) await deleteDoc(doc(db, 'orders', d.id));
-      for (const o of defaultOrders()) {
-        if (!o.isReal) await setDoc(doc(db, 'orders', o.id), o);
+      const demoOrders = state.orders.filter(o => !o.isReal);
+      for (const o of demoOrders) await deleteDoc(doc(db, 'orders', o.id));
+      for (let i = 1; i <= 20; i++) {
+        const order = buildRandomOrder(i, state.articles.length ? state.articles : articleCatalog());
+        if (!order.isReal) await setDoc(doc(db, 'orders', order.id), order);
       }
-      toast('Démo réinitialisée', 'ok');
+      toast('Démo réinitialisée');
     }
 
+    async function startScanner() {
+      const name = $('scan-user').value.trim();
+      const orderId = $('scan-order').value;
+      if (!name || !orderId) return toast('Nom complet et commande requis', 'err');
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return toast('Commande introuvable', 'err');
+      state.scannerUser = name;
+      state.scannerOrderId = orderId;
+      state.scannerStart = Date.now();
+      state.scannerExpected = order.items;
+      state.scannerScanned = Object.fromEntries(order.items.map(i => [i.sku, i.scanned || 0]));
+      state.scannerProblems = 0;
+      state.scannerResolved = 0;
+      state.scannerStep = 2;
+      await updateDoc(doc(db, 'orders', orderId), { assignedTo: name, status: 'inprogress', flowStep: 'Préparation' });
+      renderScanner();
+      renderOrders();
+      toast('Préparation lancée');
+    }
+
+    window.scanSku = function(expectedSku) {
+      const order = currentScannerOrder();
+      if (!order) return;
+      const input = $('input-' + expectedSku);
+      const value = normalizeSku(input.value);
+      if (value !== expectedSku) {
+        state.scannerProblems += 1;
+        input.value = '';
+        toast(`Mauvais SKU : attendu ${expectedSku}`, 'err');
+        renderScanner();
+        return;
+      }
+      const item = order.items.find(i => i.sku === expectedSku);
+      const current = state.scannerScanned[expectedSku] || 0;
+      if (current >= item.qty) {
+        state.scannerProblems += 1;
+        input.value = '';
+        toast('Quantité déjà complète', 'err');
+        return;
+      }
+      state.scannerScanned[expectedSku] = current + 1;
+      state.scannerResolved += 1;
+      input.value = '';
+      renderScanner();
+      const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
+      if (complete) {
+        state.scannerStep = 3;
+        renderScanner();
+        toast('Passe à la double vérification');
+      }
+    };
+
+    async function validateDoubleCheck() {
+      const order = currentScannerOrder();
+      if (!order) return;
+      const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
+      if (!allOk) return toast('La double vérification a détecté un écart', 'err');
+      state.scannerStep = 4;
+      const durationSec = (Date.now() - state.scannerStart) / 1000;
+      const badge = state.scannerProblems === 0 ? 'Sans faute' : (state.scannerProblems <= 2 ? 'Bon contrôle' : 'À revoir');
+      const updatedItems = order.items.map(i => ({ ...i, scanned: state.scannerScanned[i.sku] || 0 }));
+      await updateDoc(doc(db, 'orders', order.id), { items: updatedItems, status: 'completed', flowStep: 'Expédition', assignedTo: state.scannerUser });
+      for (const i of updatedItems) {
+        const art = state.articles.find(a => a.sku === i.sku);
+        if (art) {
+          const newQty = Math.max(0, Number(art.qty || 0) - Number(i.qty || 0));
+          await updateDoc(doc(db, 'articles', art.sku), { qty: newQty });
+          await saveMovement(art.sku, 'out', i.qty, state.scannerUser, `Commande ${order.id}`);
+        }
+      }
+      await addDoc(collection(db, 'feedbacks'), {
+        orderId: order.id,
+        user: state.scannerUser,
+        durationSec,
+        errors: state.scannerProblems,
+        resolved: state.scannerResolved,
+        badge,
+        date: new Date().toISOString()
+      });
+      $('scan-feedback').innerHTML = `
+        <div class="result-box">
+          <h3>Commande validée</h3>
+          <p><strong>Préparateur :</strong> ${state.scannerUser}</p>
+          <p><strong>Temps :</strong> ${Math.round(durationSec)} secondes</p>
+          <p><strong>Erreurs :</strong> ${state.scannerProblems}</p>
+          <p><strong>Blocages résolus :</strong> ${state.scannerResolved}</p>
+          <p><strong>Badge :</strong> <span class="badge completed">${badge}</span></p>
+        </div>
+      `;
+      renderScanner();
+      toast('Commande terminée');
+    }
+
+    function backToPicking() {
+      state.scannerStep = 2;
+      renderScanner();
+    }
+
+    window.loadScannerOrder = function(id) {
+      switchTab('scanner');
+      $('scan-order').value = id;
+      state.scannerOrderId = id;
+      renderScanner();
+    };
+
+    window.viewOrder = function(id) {
+      const order = state.orders.find(o => o.id === id);
+      if (!order) return;
+      const p = orderProgress(order);
+      $('modal-body').innerHTML = `
+        <div class="detail-grid">
+          <div><strong>Client</strong><br>${order.client}</div>
+          <div><strong>Date</strong><br>${formatDate(order.date)}</div>
+          <div><strong>Mode</strong><br>${order.shippingMode || '—'}</div>
+          <div><strong>Préparateur</strong><br>${order.assignedTo || '—'}</div>
+          <div><strong>Statut</strong><br>${statusLabel(order.status)}</div>
+          <div><strong>Cas</strong><br>${order.issueCase || 'Aucun'}</div>
+        </div>
+        <hr>
+        ${order.items.map(i => `<div class="mini-row"><span><code>${i.sku}</code> ${i.name}<br><small>${i.location || '—'}</small></span><strong>${i.scanned || 0}/${i.qty}</strong></div>`).join('')}
+        <hr>
+        <p><strong>Progression :</strong> ${p.scanned}/${p.total}</p>
+      `;
+      $('modal').classList.add('open');
+    };
+
     window.editArticle = function(sku) {
-      const a = articles.find(x => x.sku === sku);
+      const a = state.articles.find(x => x.sku === sku);
       if (!a) return;
       $('art-sku').value = a.sku;
       $('art-name').value = a.name;
       $('art-qty').value = a.qty;
       $('art-location').value = a.location || '';
       $('art-category').value = a.category || '';
-      $('art-threshold').value = a.threshold ?? 0;
-      document.querySelector('[data-tab="articles"]').click();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      $('art-threshold').value = a.threshold || 0;
+      $('art-price').value = a.price || 0;
+      switchTab('articles');
     };
 
     window.removeArticle = async function(sku) {
       if (!confirm(`Supprimer l'article ${sku} ?`)) return;
       await deleteDoc(doc(db, 'articles', sku));
-      toast('Article supprimé', 'ok');
-    };
-
-    window.viewOrder = function(id) {
-      const o = orders.find(x => x.id === id);
-      if (!o) return;
-      const total = o.items.reduce((s,i) => s + Number(i.qty || 0), 0);
-      const scanned = o.items.reduce((s,i) => s + Number(i.scanned || 0), 0);
-      const html = `
-        <div class="modal-line"><strong>ID :</strong> <code>${o.id}</code></div>
-        <div class="modal-line"><strong>Client :</strong> ${o.client}</div>
-        <div class="modal-line"><strong>Tracking :</strong> <code>${o.tracking}</code></div>
-        <div class="modal-line"><strong>Statut :</strong> ${statusLabel(o.status)}</div>
-        <div class="modal-line"><strong>Préparateur :</strong> ${o.assignedTo || '—'}</div>
-        <div class="modal-line"><strong>Type :</strong> ${o.isReal ? 'Réelle' : 'Démo'} ${o.urgent ? ' / URGENTE' : ''}</div>
-        <div class="modal-line"><strong>Avancement :</strong> ${scanned}/${total}</div>
-        <hr />
-        ${o.items.map(i => `<div class="modal-item"><span><code>${i.sku}</code> ${i.name}<br><small>${i.location || ''}</small></span><strong>${i.scanned || 0}/${i.qty}</strong></div>`).join('')}
-      `;
-      $('modal-body').innerHTML = html;
-      $('modal').classList.add('open');
+      toast('Article supprimé');
     };
 
     window.removeOrder = async function(id) {
       if (!confirm(`Supprimer la commande ${id} ?`)) return;
       await deleteDoc(doc(db, 'orders', id));
-      toast('Commande supprimée', 'ok');
+      toast('Commande supprimée');
     };
 
-    function fillArticleOptions() {
-      $('new-sku').innerHTML = '<option value="">Choisir un article</option>' + articles
-        .sort((a,b) => a.sku.localeCompare(b.sku))
-        .map(a => `<option value="${a.sku}">${a.sku} — ${a.name}</option>`)
-        .join('');
-    }
-
-    function switchTab(name) {
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('tab-' + name).classList.add('active');
-      document.querySelector(`[data-tab="${name}"]`).classList.add('active');
-      if (name === 'qr') renderQR();
-    }
+    window.stockMove = async function(sku) {
+      const art = state.articles.find(a => a.sku === sku);
+      if (!art) return;
+      const type = prompt(`Mouvement pour ${sku} : tape IN pour entrée ou OUT pour sortie`, 'OUT');
+      if (!type) return;
+      const qty = Number(prompt('Quantité ?', '1'));
+      if (!qty || qty < 1) return;
+      const by = prompt('Nom de la personne ?', 'Opérateur') || 'Opérateur';
+      const reason = prompt('Raison du mouvement ?', 'Ajustement manuel') || 'Ajustement manuel';
+      const isIn = type.toUpperCase() === 'IN';
+      const newQty = isIn ? art.qty + qty : Math.max(0, art.qty - qty);
+      await updateDoc(doc(db, 'articles', sku), { qty: newQty });
+      await saveMovement(sku, isIn ? 'in' : 'out', qty, by, reason);
+      toast('Mouvement enregistré');
+    };
 
     window.addEventListener('DOMContentLoaded', async () => {
       await seedIfNeeded();
-
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-      });
-
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
       $('save-article').addEventListener('click', saveArticle);
+      $('clear-article').addEventListener('click', clearArticleForm);
       $('create-order').addEventListener('click', createOrder);
       $('reset-demo').addEventListener('click', resetDemo);
       $('article-search').addEventListener('input', renderArticles);
       $('order-search').addEventListener('input', renderOrders);
       $('order-filter').addEventListener('change', renderOrders);
+      $('start-scan').addEventListener('click', startScanner);
+      $('back-picking').addEventListener('click', backToPicking);
+      $('validate-double').addEventListener('click', validateDoubleCheck);
       $('close-modal').addEventListener('click', () => $('modal').classList.remove('open'));
 
       onSnapshot(collection(db, 'articles'), snap => {
-        articles = snap.docs.map(d => d.data());
-        fillArticleOptions();
+        state.articles = snap.docs.map(d => d.data());
         renderArticles();
         renderStats();
       });
-
       onSnapshot(collection(db, 'orders'), snap => {
-        orders = snap.docs.map(d => d.data());
+        state.orders = snap.docs.map(d => d.data());
         renderOrders();
-        renderUrgentBox();
+        renderDashboardUrgent();
         renderStats();
+        renderScanner();
+      });
+      onSnapshot(query(collection(db, 'stock_history'), orderBy('date', 'desc')), snap => {
+        state.movements = snap.docs.map(d => d.data());
+        renderMovements();
+      });
+      onSnapshot(query(collection(db, 'feedbacks'), orderBy('date', 'desc')), snap => {
+        state.feedbacks = snap.docs.map(d => d.data());
+        renderFeedbacks();
       });
 
+      $('order-case').innerHTML = casePool().map(c => `<option value="${c}">${c}</option>`).join('');
+      $('order-shipping').innerHTML = shippingPool().map(c => `<option value="${c}">${c}</option>`).join('');
       renderQR();
     });
   </script>
   <style>
     :root {
-      --blue:#1a73e8;
-      --blue-soft:#e8f0fe;
-      --green:#2e7d32;
-      --green-soft:#e8f5e9;
-      --orange:#ef6c00;
-      --orange-soft:#fff3e0;
-      --red:#d93025;
-      --red-soft:#fdecea;
-      --purple:#6a1b9a;
-      --purple-soft:#f3e5f5;
-      --text:#1f1f1f;
-      --muted:#666;
-      --line:#d9dde3;
-      --bg:#f3f6fb;
-      --card:#ffffff;
-      --shadow:0 10px 24px rgba(26,115,232,.08);
-      --radius:16px;
+      --blue:#1a73e8; --blue-soft:#e8f0fe; --green:#2e7d32; --green-soft:#e8f5e9;
+      --orange:#ef6c00; --orange-soft:#fff3e0; --red:#d93025; --red-soft:#fdecea;
+      --purple:#6a1b9a; --purple-soft:#f3e5f5; --gray:#6b7280; --bg:#f4f7fb; --card:#fff;
+      --line:#e2e8f0; --text:#1f2937; --radius:18px; --shadow:0 12px 28px rgba(17,24,39,.08);
     }
-
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:Segoe UI, Arial, sans-serif; background:var(--bg); color:var(--text); }
-    header {
-      position:sticky; top:0; z-index:20;
-      background:linear-gradient(135deg,#1a73e8,#1557b0);
-      color:#fff; padding:16px 20px; box-shadow:0 4px 16px rgba(0,0,0,.18);
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-    }
-    header h1 { font-size:20px; }
-    header a {
-      color:#fff; text-decoration:none; background:rgba(255,255,255,.14);
-      padding:10px 14px; border-radius:10px; font-weight:600;
-    }
-
-    .shell { max-width:1300px; margin:22px auto; padding:0 16px 40px; }
-
-    .tabs {
-      display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px;
-      background:#fff; border-radius:18px; padding:10px; box-shadow:var(--shadow);
-    }
-    .tab-btn {
-      border:none; background:transparent; padding:12px 18px; border-radius:12px;
-      font-weight:700; cursor:pointer; color:#4a4a4a; transition:.2s;
-    }
-    .tab-btn.active { background:var(--blue-soft); color:var(--blue); }
-
-    .tab-panel { display:none; }
-    .tab-panel.active { display:block; }
-
-    .grid-stats {
-      display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:18px;
-    }
-    .stat {
-      background:var(--card); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow);
-      border:1px solid #eef2f7;
-    }
-    .stat .value { font-size:30px; font-weight:800; color:var(--blue); }
-    .stat .label { color:var(--muted); font-size:13px; margin-top:6px; }
-
-    .card {
-      background:var(--card); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow);
-      margin-bottom:18px; border:1px solid #eef2f7;
-    }
-    .card h2 { font-size:18px; color:var(--blue); margin-bottom:14px; }
-    .card p.sub { color:var(--muted); font-size:14px; margin-bottom:14px; }
-
-    .row { display:flex; gap:12px; flex-wrap:wrap; }
-    .field { display:flex; flex-direction:column; gap:6px; flex:1; min-width:180px; }
-    .field label { font-size:13px; font-weight:700; color:#555; }
-    .field input, .field select {
-      border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px; background:#fff;
-    }
-
-    .btn {
-      border:none; border-radius:12px; padding:12px 16px; font-weight:700; cursor:pointer; transition:.18s;
-    }
-    .btn:hover { transform:translateY(-1px); }
-    .btn.blue { background:var(--blue); color:#fff; }
-    .btn.green { background:var(--green); color:#fff; }
-    .btn.orange { background:var(--orange); color:#fff; }
-    .btn.gray { background:#e9edf3; color:#2d2d2d; }
-
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
-    .toolbar input, .toolbar select {
-      border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:14px; background:#fff;
-    }
-
-    .table-wrap { overflow:auto; }
-    table { width:100%; border-collapse:collapse; min-width:860px; }
-    th, td { padding:12px 10px; border-bottom:1px solid #edf1f6; text-align:left; font-size:14px; vertical-align:middle; }
-    th { color:var(--blue); background:#f8fbff; position:sticky; top:0; }
-    td code { font-size:12px; }
-    .actions-cell { display:flex; gap:8px; flex-wrap:wrap; }
-
-    .mini {
-      border:none; border-radius:10px; padding:8px 10px; font-size:12px; font-weight:700; cursor:pointer;
-    }
-    .mini.blue { background:var(--blue-soft); color:var(--blue); }
-    .mini.red { background:var(--red-soft); color:var(--red); }
-
-    .badge {
-      display:inline-block; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; margin-right:6px;
-    }
-    .badge.pending { background:var(--orange-soft); color:var(--orange); }
-    .badge.inprogress { background:var(--blue-soft); color:var(--blue); }
-    .badge.completed { background:var(--green-soft); color:var(--green); }
-    .badge.urgent { background:var(--red); color:#fff; }
-    .badge.real { background:var(--purple); color:#fff; }
-    .badge.demo { background:var(--green-soft); color:var(--green); }
-
-    .progress-wrap { min-width:120px; }
-    .progress-label { font-size:12px; color:var(--muted); margin-bottom:4px; }
-    .progress { height:8px; background:#e8edf3; border-radius:999px; overflow:hidden; }
-    .progress-fill { height:100%; background:var(--blue); }
-
-    .danger-text { color:var(--red); font-weight:800; }
-    .empty { text-align:center; color:#888; padding:26px !important; }
-    .empty-inline { color:#888; }
-
-    .urgent-row {
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-      padding:12px 0; border-bottom:1px solid #edf1f6;
-    }
-    .urgent-row:last-child { border-bottom:none; }
-
-    .two-col { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; }
-
-    #qrcode {
-      display:inline-block; padding:14px; background:#fff; border-radius:18px; border:2px solid #edf1f6;
-      margin-bottom:14px;
-    }
-    .qr-box { text-align:center; }
-    .qr-url {
-      display:block; word-break:break-all; color:#666; font-size:13px; margin-top:8px;
-      background:#f7f9fc; padding:10px 12px; border-radius:12px;
-    }
-
-    .toast {
-      position:fixed; right:20px; bottom:20px; background:#202124; color:#fff;
-      padding:12px 16px; border-radius:12px; opacity:0; transform:translateY(12px);
-      transition:.25s; pointer-events:none; z-index:100;
-    }
-    .toast.show { opacity:1; transform:translateY(0); }
-    .toast.ok { background:var(--green); }
-    .toast.err { background:var(--red); }
-
-    .modal {
-      position:fixed; inset:0; background:rgba(0,0,0,.48); display:none; align-items:center; justify-content:center;
-      padding:20px; z-index:90;
-    }
-    .modal.open { display:flex; }
-    .modal-box {
-      width:min(620px,100%); background:#fff; border-radius:20px; padding:22px; box-shadow:0 20px 50px rgba(0,0,0,.25);
-      max-height:85vh; overflow:auto;
-    }
-    .modal-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
-    .modal-top h3 { color:var(--blue); }
-    .close-btn {
-      border:none; background:#eef3f9; width:38px; height:38px; border-radius:50%; font-size:18px; cursor:pointer;
-    }
-    .modal-line { margin-bottom:8px; font-size:14px; }
-    .modal-item {
-      display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid #edf1f6; font-size:14px;
-    }
-    .modal-item small { color:#777; }
-
-    @media (max-width: 900px) {
-      .two-col { grid-template-columns:1fr; }
-    }
-
-    @media (max-width: 700px) {
-      header { padding:14px; }
-      header h1 { font-size:17px; }
-      .shell { padding:0 12px 28px; }
-      .tabs { padding:8px; }
-      .tab-btn { flex:1 1 calc(50% - 10px); text-align:center; }
-      table { min-width:760px; }
-    }
+    *{box-sizing:border-box;margin:0;padding:0} body{font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+    header h1{font-size:20px} header a{color:#fff;text-decoration:none;background:rgba(255,255,255,.12);padding:10px 14px;border-radius:12px;font-weight:700}
+    .wrap{max-width:1400px;margin:20px auto;padding:0 14px 40px}.tabs{display:flex;gap:10px;flex-wrap:wrap;background:#fff;padding:10px;border-radius:18px;box-shadow:var(--shadow);margin-bottom:18px}
+    .tab-btn{border:none;background:transparent;padding:12px 16px;border-radius:12px;cursor:pointer;font-weight:800;color:#4b5563}.tab-btn.active{background:var(--blue-soft);color:var(--blue)}
+    .tab-panel{display:none}.tab-panel.active{display:block}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px}
+    .stat,.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid #edf2f7}.stat{padding:20px}.stat .v{font-size:30px;font-weight:900;color:var(--blue)}.stat .l{font-size:13px;color:#6b7280;margin-top:6px}
+    .card{padding:20px;margin-bottom:18px}.card h2{font-size:18px;color:var(--blue);margin-bottom:12px}.sub{font-size:14px;color:#6b7280;margin-bottom:14px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.grid-3{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}.row{display:flex;gap:12px;flex-wrap:wrap}.field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:170px}.field label{font-size:13px;font-weight:700;color:#4b5563}.field input,.field select{border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;background:#fff}
+    .btn,.mini{border:none;cursor:pointer;font-weight:800;border-radius:12px}.btn{padding:12px 16px}.btn.blue{background:var(--blue);color:#fff}.btn.orange{background:var(--orange);color:#fff}.btn.gray{background:#eef2f7;color:#374151}.btn.green{background:var(--green);color:#fff}.mini{padding:8px 10px;font-size:12px}.mini.blue{background:var(--blue-soft);color:var(--blue)}.mini.red{background:var(--red-soft);color:var(--red)}.mini.green{background:var(--green-soft);color:var(--green)}.mini.orange{background:var(--orange-soft);color:var(--orange)}
+    table{width:100%;border-collapse:collapse;min-width:980px}th,td{padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:left;font-size:14px;vertical-align:middle}th{background:#f8fbff;color:var(--blue)}.table-wrap{overflow:auto}.actions-cell{display:flex;gap:8px;flex-wrap:wrap}.danger{color:var(--red);font-weight:900}
+    .badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;margin-right:5px}.badge.pending{background:var(--orange-soft);color:var(--orange)}.badge.inprogress{background:var(--blue-soft);color:var(--blue)}.badge.completed{background:var(--green-soft);color:var(--green)}.badge.cancelled,.badge.issue{background:#eee;color:#555}.badge.urgent{background:var(--red);color:#fff}.badge.real{background:var(--purple);color:#fff}.badge.demo{background:var(--green-soft);color:var(--green)}.badge.trap{background:#111827;color:#fff}
+    .progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}.progress-fill{height:100%;background:var(--blue)}.progress-text{font-size:12px;color:#6b7280;margin-bottom:4px}.mini-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #eef2f7}.mini-row:last-child{border-bottom:none}.empty,.empty-inline{color:#9ca3af;text-align:center;padding:20px}
+    .steps{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.step{padding:10px 12px;border-radius:12px;background:#eef2f7;color:#6b7280;font-weight:800}.step.active{background:var(--blue-soft);color:var(--blue)}
+    .scan-card{border:1px solid #eef2f7;border-radius:14px;padding:14px;margin-bottom:12px;background:#fbfdff}.scan-actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.scan-actions input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.scanner-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0}
+    .check-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;margin-bottom:10px}.check-row.ok{background:var(--green-soft);color:var(--green)}.check-row.ko{background:var(--red-soft);color:var(--red)}
+    .result-box{background:#f8fbff;border:1px solid #dbeafe;border-radius:16px;padding:16px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+    .toast{position:fixed;right:18px;bottom:18px;background:#111827;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s;z-index:100}.toast.show{opacity:1;transform:translateY(0)}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:90}.modal.open{display:flex}.modal-box{background:#fff;border-radius:20px;padding:22px;width:min(780px,100%);max-height:85vh;overflow:auto}.modal-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.close-btn{border:none;background:#eef2f7;width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer}
+    #qrcode{display:inline-block;padding:16px;background:#fff;border-radius:18px;border:2px solid #eef2f7} code{font-size:12px}
+    @media (max-width: 1000px){.grid-2,.grid-3,.detail-grid{grid-template-columns:1fr}} @media (max-width:700px){header h1{font-size:17px}.tab-btn{flex:1 1 calc(50% - 10px)}table{min-width:860px}}
   </style>
 </head>
 <body>
   <header>
-    <h1>📦 WMS — Interface Formateur</h1>
+    <h1>📦 WMS Logistique — Gestion</h1>
     <a href="index.html">← Accueil</a>
   </header>
 
-  <div class="shell">
+  <div class="wrap">
     <div class="tabs">
       <button class="tab-btn active" data-tab="dashboard">Tableau de bord</button>
       <button class="tab-btn" data-tab="orders">Commandes</button>
-      <button class="tab-btn" data-tab="articles">Articles</button>
+      <button class="tab-btn" data-tab="articles">Stock / Articles</button>
+      <button class="tab-btn" data-tab="scanner">Scanner</button>
       <button class="tab-btn" data-tab="qr">QR Code</button>
     </div>
 
     <section id="tab-dashboard" class="tab-panel active">
-      <div class="grid-stats">
-        <div class="stat"><div class="value" id="stat-total">0</div><div class="label">Commandes totales</div></div>
-        <div class="stat"><div class="value" id="stat-pending" style="color:#ef6c00">0</div><div class="label">En attente</div></div>
-        <div class="stat"><div class="value" id="stat-progress">0</div><div class="label">En cours</div></div>
-        <div class="stat"><div class="value" id="stat-done" style="color:#2e7d32">0</div><div class="label">Terminées</div></div>
-        <div class="stat"><div class="value" id="stat-urgent" style="color:#d93025">0</div><div class="label">Urgentes</div></div>
-        <div class="stat"><div class="value" id="stat-articles">0</div><div class="label">Articles</div></div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="st-total">0</div><div class="l">Commandes totales</div></div>
+        <div class="stat"><div class="v" id="st-pending" style="color:#ef6c00">0</div><div class="l">En attente</div></div>
+        <div class="stat"><div class="v" id="st-progress">0</div><div class="l">En cours</div></div>
+        <div class="stat"><div class="v" id="st-done" style="color:#2e7d32">0</div><div class="l">Terminées</div></div>
+        <div class="stat"><div class="v" id="st-urgent" style="color:#d93025">0</div><div class="l">Urgentes</div></div>
+        <div class="stat"><div class="v" id="st-articles">0</div><div class="l">Articles</div></div>
       </div>
-
-      <div class="two-col">
+      <div class="grid-2">
         <div class="card">
-          <h2>Commandes urgentes actives</h2>
-          <p class="sub">Les commandes pièges restent présentées comme des commandes normales côté employé.</p>
-          <div id="urgent-box"></div>
+          <h2>Commandes urgentes</h2>
+          <p class="sub">Les commandes pièges restent invisibles comme pièges côté employé.</p>
+          <div id="urgent-list"></div>
         </div>
-
         <div class="card">
           <h2>Actions rapides</h2>
-          <p class="sub">Crée une nouvelle commande ou remets la démo à zéro.</p>
-          <div class="row">
-            <button class="btn blue" id="reset-demo">Réinitialiser la démo</button>
-          </div>
+          <p class="sub">Le reset supprime uniquement les commandes de démo puis en régénère.</p>
+          <button class="btn orange" id="reset-demo">Réinitialiser la démo</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>Derniers feedbacks</h2>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Préparateur</th><th>Commande</th><th>Temps</th><th>Erreurs</th><th>Résolus</th><th>Badge</th></tr></thead><tbody id="feedbacks-body"></tbody></table></div>
+        </div>
+        <div class="card">
+          <h2>Historique des mouvements</h2>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>SKU</th><th>Article</th><th>Type</th><th>Qté</th><th>Par</th><th>Raison</th></tr></thead><tbody id="moves-body"></tbody></table></div>
         </div>
       </div>
     </section>
 
     <section id="tab-orders" class="tab-panel">
       <div class="card">
-        <h2>Nouvelle commande</h2>
+        <h2>Créer une commande</h2>
         <div class="row">
-          <div class="field">
-            <label>Client</label>
-            <input id="new-client" type="text" placeholder="Nom du client" />
-          </div>
-          <div class="field">
-            <label>Article</label>
-            <select id="new-sku"><option value="">Chargement…</option></select>
-          </div>
-          <div class="field" style="max-width:120px;">
-            <label>Qté</label>
-            <input id="new-qty" type="number" min="1" value="1" />
-          </div>
-          <div class="field" style="max-width:180px;">
-            <label>Type</label>
-            <select id="new-type">
-              <option value="demo">Démo</option>
-              <option value="real">Réelle / urgente</option>
-            </select>
-          </div>
+          <div class="field"><label>Client</label><input id="order-client" placeholder="Nom du client" /></div>
+          <div class="field"><label>Préparateur assigné</label><input id="order-assigned" placeholder="Nom de l'élève" /></div>
+          <div class="field"><label>Mode de livraison</label><select id="order-shipping"></select></div>
+          <div class="field"><label>Cas de figure</label><select id="order-case"></select></div>
+          <div class="field"><label>Article</label><select id="order-item-sku"></select></div>
+          <div class="field" style="max-width:120px"><label>Qté</label><input id="order-item-qty" type="number" min="1" value="1" /></div>
         </div>
-        <div style="margin-top:14px;">
-          <button class="btn blue" id="create-order">Créer la commande</button>
+        <div class="row" style="margin-top:12px;align-items:center">
+          <label><input type="checkbox" id="order-real" /> Commande réelle / urgente</label>
+          <label><input type="checkbox" id="order-trap" /> Commande piège</label>
         </div>
+        <div style="margin-top:14px"><button class="btn blue" id="create-order">Créer la commande</button></div>
       </div>
-
       <div class="card">
-        <div class="toolbar">
-          <input id="order-search" type="text" placeholder="Rechercher une commande" />
-          <select id="order-filter">
-            <option value="">Tous les statuts</option>
-            <option value="pending">En attente</option>
-            <option value="inprogress">En cours</option>
-            <option value="completed">Terminée</option>
-            <option value="urgent">Urgentes</option>
-          </select>
+        <div class="row" style="margin-bottom:12px">
+          <div class="field"><label>Recherche</label><input id="order-search" placeholder="Commande, client, préparateur" /></div>
+          <div class="field" style="max-width:220px"><label>Filtre</label><select id="order-filter"><option value="">Tous</option><option value="pending">En attente</option><option value="inprogress">En cours</option><option value="completed">Terminée</option><option value="urgent">Urgentes</option></select></div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Client</th>
-                <th>Tracking</th>
-                <th>Statut</th>
-                <th>Type</th>
-                <th>Articles</th>
-                <th>Avancement</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>ID</th><th>Client</th><th>Date</th><th>Livraison</th><th>Statut</th><th>Préparateur</th><th>Type</th><th>Module</th><th>Cas</th><th>Progression</th><th>Actions</th></tr></thead>
             <tbody id="orders-body"></tbody>
           </table>
         </div>
@@ -617,63 +737,78 @@
 
     <section id="tab-articles" class="tab-panel">
       <div class="card">
-        <h2>Ajouter ou modifier un article</h2>
+        <h2>Ajouter / modifier un article</h2>
         <div class="row">
-          <div class="field"><label>SKU</label><input id="art-sku" type="text" placeholder="Ex : LOG-031" /></div>
-          <div class="field"><label>Nom</label><input id="art-name" type="text" placeholder="Nom de l'article" /></div>
-          <div class="field"><label>Quantité</label><input id="art-qty" type="number" min="0" placeholder="0" /></div>
-          <div class="field"><label>Emplacement</label><input id="art-location" type="text" placeholder="Ex : Zone A - Rack 2" /></div>
-          <div class="field"><label>Catégorie</label><input id="art-category" type="text" placeholder="Ex : Matériaux" /></div>
-          <div class="field"><label>Seuil alerte</label><input id="art-threshold" type="number" min="0" placeholder="0" /></div>
+          <div class="field"><label>SKU</label><input id="art-sku" placeholder="LOG-031" /></div>
+          <div class="field"><label>Nom</label><input id="art-name" placeholder="Nom de l'article" /></div>
+          <div class="field"><label>Quantité</label><input id="art-qty" type="number" min="0" /></div>
+          <div class="field"><label>Emplacement</label><input id="art-location" placeholder="Zone A - Rack 1" /></div>
+          <div class="field"><label>Catégorie</label><input id="art-category" placeholder="Fournitures" /></div>
+          <div class="field"><label>Seuil</label><input id="art-threshold" type="number" min="0" /></div>
+          <div class="field"><label>Prix</label><input id="art-price" type="number" min="0" step="0.01" /></div>
         </div>
-        <div style="margin-top:14px;">
-          <button class="btn blue" id="save-article">Enregistrer l'article</button>
-        </div>
+        <div class="row" style="margin-top:14px"><button class="btn blue" id="save-article">Enregistrer</button><button class="btn gray" id="clear-article">Effacer</button></div>
       </div>
-
       <div class="card">
-        <div class="toolbar">
-          <input id="article-search" type="text" placeholder="Rechercher un article" />
-        </div>
+        <div class="row" style="margin-bottom:12px"><div class="field"><label>Recherche</label><input id="article-search" placeholder="SKU, nom, emplacement" /></div></div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Nom</th>
-                <th>Qté</th>
-                <th>Emplacement</th>
-                <th>Catégorie</th>
-                <th>Seuil</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>SKU</th><th>Nom</th><th>Qté</th><th>Emplacement</th><th>Catégorie</th><th>Seuil</th><th>Prix</th><th>Actions</th></tr></thead>
             <tbody id="articles-body"></tbody>
           </table>
         </div>
       </div>
     </section>
 
+    <section id="tab-scanner" class="tab-panel">
+      <div class="card">
+        <h2>Scanner / Préparation</h2>
+        <div class="steps">
+          <div class="step active" id="scanner-step-1">1. Identification</div>
+          <div class="step" id="scanner-step-2">2. Picking / Scan</div>
+          <div class="step" id="scanner-step-3">3. Double vérification</div>
+          <div class="step" id="scanner-step-4">4. Confirmation</div>
+        </div>
+        <div class="grid-3">
+          <div>
+            <div class="row">
+              <div class="field"><label>Nom et prénom</label><input id="scan-user" placeholder="Ex : Luca Martin" /></div>
+              <div class="field"><label>Commande</label><select id="scan-order"></select></div>
+            </div>
+            <div style="margin-top:14px"><button class="btn blue" id="start-scan">Commencer</button></div>
+            <div id="scan-current" style="margin-top:18px"></div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:12px">
+              <h2>Double vérification</h2>
+              <div id="double-check-list"></div>
+              <div class="row" style="margin-top:12px"><button class="btn gray" id="back-picking">Revenir corriger</button><button class="btn green" id="validate-double">Valider la commande</button></div>
+            </div>
+            <div class="card">
+              <h2>Feedback</h2>
+              <div id="scan-feedback" class="sub">Le résumé final apparaîtra ici après validation.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="tab-qr" class="tab-panel">
-      <div class="card qr-box">
-        <h2>QR Code — Interface employé</h2>
-        <p class="sub">Ce QR code ouvre directement la page <strong>demande.html</strong> pour les employés. Aucun menu intermédiaire n'est affiché.</p>
+      <div class="card" style="text-align:center">
+        <h2>QR Code vers demande.html</h2>
+        <p class="sub">Le QR code ouvre directement l'interface employé pour passer une vraie commande.</p>
         <div id="qrcode"></div>
-        <span class="qr-url" id="qr-url"></span>
+        <div class="sub" id="qr-url" style="margin-top:12px;word-break:break-all"></div>
       </div>
     </section>
   </div>
 
   <div id="modal" class="modal">
     <div class="modal-box">
-      <div class="modal-top">
-        <h3>Détail commande</h3>
-        <button class="close-btn" id="close-modal">✕</button>
-      </div>
+      <div class="modal-top"><h3>Détail commande</h3><button class="close-btn" id="close-modal">✕</button></div>
       <div id="modal-body"></div>
     </div>
   </div>
-
   <div id="toast" class="toast"></div>
 </body>
 </html>
