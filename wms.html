@@ -250,7 +250,7 @@
       const tbody = $('articles-body');
       const filtered = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku));
       const rows = filtered.map(a => `
-        <tr style="cursor:pointer" onclick="window.showArticleQR('${a.sku}')">
+        <tr>
           <td><code>${a.sku}</code></td>
           <td>${a.name}</td>
           <td class="${a.qty <= a.threshold ? 'danger' : ''}">${a.qty}</td>
@@ -265,10 +265,11 @@
             </div>
           </td>
           <td class="actions-cell">
-            <button class="mini blue" onclick="window.editArticle('${a.sku}')">Modifier</button>
-            <button class="mini orange" onclick="window.stockMove('${a.sku}')">Entrée/Sortie</button>
-            <button class="mini green" onclick="window.printArticle('${a.sku}')">🖨️ Imprimer</button>
-            <button class="mini red" onclick="window.removeArticle('${a.sku}')">Supprimer</button>
+            <button class="mini blue" onclick="event.stopPropagation();window.editArticle('${a.sku}')">Modifier</button>
+            <button class="mini orange" onclick="event.stopPropagation();window.stockMove('${a.sku}')">Entrée/Sortie</button>
+            <button class="mini green" onclick="event.stopPropagation();window.showArticleQR('${a.sku}')">🔍 QR</button>
+            <button class="mini green" onclick="event.stopPropagation();window.printArticle('${a.sku}')">🖨️ Imprimer</button>
+            <button class="mini red" onclick="event.stopPropagation();window.removeArticle('${a.sku}')">Supprimer</button>
           </td>
         </tr>
       `).join('');
@@ -734,20 +735,23 @@
 
         window.editArticle = function(sku) {
       const a = state.articles.find(x => x.sku === sku);
-      if (!a) return;
-      switchTab('articles');
-      setTimeout(() => {
-        $('art-sku').value = a.sku;
-        $('art-sku').readOnly = true;
-        $('art-name').value = a.name;
-        $('art-qty').value = a.qty;
-        $('art-location').value = a.location || '';
-        $('art-category').value = a.category || '';
-        $('art-threshold').value = a.threshold || 0;
-        $('art-price').value = a.price || 0;
-        $('art-sku').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        $('art-name').focus();
-      }, 50);
+      if (!a) { alert('Article introuvable : ' + sku); return; }
+      // Forcer l'onglet articles visible
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'articles'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-articles'));
+      // Remplir le formulaire
+      $('art-sku').value = a.sku;
+      $('art-sku').readOnly = true;
+      $('art-name').value = a.name;
+      $('art-qty').value = a.qty;
+      $('art-location').value = a.location || '';
+      $('art-category').value = a.category || '';
+      $('art-threshold').value = a.threshold || 0;
+      $('art-price').value = a.price || 0;
+      // Scroll vers le formulaire
+      $('art-sku').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $('art-name').focus();
+      toast('Article ' + sku + ' chargé — modifie et clique Enregistrer');
     };
 
     window.removeArticle = async function(sku) {
