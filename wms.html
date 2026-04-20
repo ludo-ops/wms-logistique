@@ -4,1091 +4,240 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WMS Logistique - Gestion</title>
+  <title>WMS Logistique</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import {
-      getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-      onSnapshot, serverTimestamp, query, orderBy
-    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
-      authDomain: "wms-logistique.firebaseapp.com",
-      projectId: "wms-logistique",
-      storageBucket: "wms-logistique.firebasestorage.app",
-      messagingSenderId: "34951077064",
-      appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    const state = {
-      articles: [],
-      orders: [],
-      movements: [],
-      feedbacks: [],
-      scannerOrderId: '',
-      scannerUser: '',
-      scannerStart: null,
-      scannerExpected: [],
-      scannerScanned: {},
-      scannerProblems: 0,
-      scannerResolved: 0,
-      scannerStep: 1,
-    };
-
-    const $ = (id) => document.getElementById(id);
-    const money = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
-
-    function uid(prefix='ID') {
-      return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-    }
-
-    function randomPick(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
-    function randomInt(min, max) {
-      return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
-
-    function tracking() {
-      return 'TRK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-    }
-
-    function formatDate(value) {
-      if (!value) return '—';
-      try {
-        const d = value?.toDate ? value.toDate() : new Date(value);
-        return d.toLocaleString('fr-BE');
-      } catch {
-        return '—';
-      }
-    }
-
-    function normalizeSku(v) {
-      if (!v) return '';
-      const m = v.toUpperCase().trim().match(/^([A-Z]{2,5})-?0*(\d+)$/);
-      return m ? `${m[1]}-${m[2].padStart(3,'0')}` : v.toUpperCase().trim();
-    }
-
-    function articleCatalog() {
-      return [
-        { sku:'LOG-001', name:'Papier A4 rame 500f', qty:120, location:'Allée A - Étagère 1', category:'Fournitures', threshold:10, price:5.5 },
-        { sku:'LOG-002', name:'Stylos bleus boîte x20', qty:85, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10, price:7.9 },
-        { sku:'LOG-003', name:'Stylos rouges boîte x20', qty:60, location:'Allée A - Étagère 2', category:'Fournitures', threshold:10, price:7.9 },
-        { sku:'LOG-004', name:'Classeurs A4 lot x5', qty:40, location:'Allée A - Étagère 3', category:'Fournitures', threshold:5, price:12.5 },
-        { sku:'LOG-005', name:'Cahiers quadrillés lot x10', qty:55, location:'Allée A - Étagère 4', category:'Fournitures', threshold:5, price:9.9 },
-        { sku:'LOG-006', name:'Scotch emballage rouleau', qty:200, location:'Allée B - Étagère 1', category:'Emballage', threshold:20, price:2.2 },
-        { sku:'LOG-007', name:'Carton 40x30 cm', qty:150, location:'Allée B - Étagère 2', category:'Emballage', threshold:20, price:1.8 },
-        { sku:'LOG-008', name:'Film bulle 10m', qty:70, location:'Allée B - Étagère 3', category:'Emballage', threshold:10, price:4.5 },
-        { sku:'LOG-016', name:'Étiquettes autocollantes rouleau', qty:300, location:'Allée C - Étagère 1', category:'Fournitures', threshold:30, price:8.4 },
-        { sku:'LOG-019', name:'Gants de manutention paire', qty:30, location:'Allée C - Étagère 3', category:'EPI', threshold:5, price:6.5 },
-        { sku:'LOG-020', name:'Casque sécurité chantier', qty:12, location:'Allée C - Étagère 4', category:'EPI', threshold:3, price:18.9 },
-        { sku:'LOG-022', name:'Chaussures sécurité p42', qty:9, location:'Allée D - Étagère 1', category:'EPI', threshold:2, price:52 },
-        { sku:'MAT-001', name:'Bloc béton 33.19', qty:500, location:'Zone F - Rack 1', category:'Matériaux', threshold:50, price:2.5 },
-        { sku:'MAT-006', name:'Brique Vandersanden baroque', qty:1000, location:'Zone G - Rack 1', category:'Matériaux', threshold:100, price:1.35 }
-      ];
-    }
-
-    function casePool() {
-      return ['Aucun', 'Produit manquant', 'Stock incorrect', 'Adresse invalide', 'Article remplacé', 'Retour client', 'Annulation partielle', 'Erreur de saisie', 'Multi-colis'];
-    }
-
-    function shippingPool() {
-      return ['Standard', 'Express', 'Retrait dépôt', 'Interne'];
-    }
-
-    function clientsPool() {
-      return ['Martin', 'Bernard', 'Dubois', 'Mercier', 'Fontaine', 'Simon', 'Leroy', 'Legrand', 'Petit', 'Meunier', 'Gilson', 'Piron', 'Dupont', 'Colson'];
-    }
-
-    function employeesPool() {
-      return ['Luca', 'Nadia', 'Sami', 'Julie', 'Noah', 'Emma', 'Yanis', 'Sarah'];
-    }
-
-    function buildRandomOrder(index, articles) {
-      const count = randomInt(1, 4);
-      const picks = [...articles].sort(() => Math.random() - 0.5).slice(0, count);
-      const items = picks.map(a => ({
-        sku: a.sku,
-        name: a.name,
-        qty: randomInt(1, Math.min(4, Math.max(1, a.qty > 20 ? 4 : 2))),
-        scanned: 0,
-        location: a.location,
-        price: a.price || 0
-      }));
-      const isTrap = index % 5 === 0;
-      const isReal = index % 4 === 0;
-      const urgent = isReal || index % 6 === 0;
-      const statuses = ['pending','pending','pending','inprogress'];
-      return {
-        id: `CMD-${String(index).padStart(3,'0')}`,
-        client: randomPick(clientsPool()),
-        tracking: tracking(),
-        status: randomPick(statuses),
-        urgent,
-        isReal,
-        isTrap,
-        assignedTo: Math.random() > 0.65 ? randomPick(employeesPool()) + ' Test' : '',
-        date: new Date(Date.now() - randomInt(0, 8) * 86400000).toISOString(),
-        shippingMode: randomPick(shippingPool()),
-        flowStep: randomPick(['Réception','Contrôle','Préparation','Expédition','Support']),
-        issueCase: isTrap ? randomPick(casePool().slice(1)) : randomPick(casePool()),
-        items,
-        source: 'seed'
-      };
-    }
-
-    async function seedIfNeeded() {
-      const metaRef = doc(db, 'meta', 'settings');
-      const snap = await getDoc(metaRef);
-      if (snap.exists()) return;
-      const articles = articleCatalog();
-      for (const a of articles) await setDoc(doc(db, 'articles', a.sku), a);
-      for (let i = 1; i <= 20; i++) {
-        const order = buildRandomOrder(i, articles);
-        await setDoc(doc(db, 'orders', order.id), order);
-      }
-      await setDoc(metaRef, { seeded: true, createdAt: new Date().toISOString() });
-    }
-
-    function statusLabel(s) {
-      return ({ pending:'En attente', inprogress:'En cours', completed:'Terminée', cancelled:'Annulée', issue:'Litige' })[s] || s;
-    }
-
-    function toast(message, type='ok') {
-      const el = $('toast');
-      el.textContent = message;
-      el.className = `toast show ${type}`;
-      clearTimeout(window._toast);
-      window._toast = setTimeout(() => el.className = 'toast', 3000);
-    }
-
-    function switchTab(name) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
-      if (name === 'qr') renderQR();
-      if (name === 'scanner') { setTimeout(() => window.startCamera(), 200); }
-      if (name === 'scanner') renderScanner();
-    }
-
-    function renderStats() {
-      $('st-total').textContent = state.orders.length;
-      $('st-pending').textContent = state.orders.filter(o => o.status === 'pending').length;
-      $('st-progress').textContent = state.orders.filter(o => o.status === 'inprogress').length;
-      $('st-done').textContent = state.orders.filter(o => o.status === 'completed').length;
-      $('st-urgent').textContent = state.orders.filter(o => o.urgent && o.status !== 'completed').length;
-      $('st-articles').textContent = state.articles.length;
-    }
-
-    function orderProgress(order) {
-      const total = order.items.reduce((s, i) => s + Number(i.qty || 0), 0);
-      const scanned = order.items.reduce((s, i) => s + Number(i.scanned || 0), 0);
-      return { total, scanned, pct: total ? Math.round((scanned / total) * 100) : 0 };
-    }
-
-    function renderDashboardUrgent() {
-      const urgent = state.orders.filter(o => o.urgent && o.status !== 'completed');
-      $('urgent-list').innerHTML = urgent.length ? urgent.map(o => `
-        <div class="mini-row">
-          <div>
-            <strong>${o.id}</strong> — ${o.client}<br>
-            <small>${o.shippingMode || '—'} · ${statusLabel(o.status)}</small>
-          </div>
-          <button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button>
-        </div>
-      `).join('') : '<div class="empty-inline">Aucune commande urgente active.</div>';
-    }
-
-    function renderOrders() {
-      const q = $('order-search').value.toLowerCase().trim();
-      const filter = $('order-filter').value;
-      const tbody = $('orders-body');
-      const rows = state.orders.filter(o => {
-        const okQ = !q || o.id.toLowerCase().includes(q) || o.client.toLowerCase().includes(q) || (o.assignedTo || '').toLowerCase().includes(q);
-        const okF = !filter || (filter === 'urgent' ? o.urgent : o.status === filter);
-        return okQ && okF;
-      }).sort((a,b) => a.id.localeCompare(b.id)).map(o => {
-        const p = orderProgress(o);
-        return `
-          <tr>
-            <td><code>${o.id}</code></td>
-            <td>${o.client}</td>
-            <td>${formatDate(o.date)}</td>
-            <td>${o.shippingMode || '—'}</td>
-            <td><span class="badge ${o.status}">${statusLabel(o.status)}</span></td>
-            <td>${o.assignedTo || '—'}</td>
-            <td>
-              ${o.urgent ? '<span class="badge urgent">URGENT</span>' : ''}
-              ${o.isReal ? '<span class="badge real">Réelle</span>' : '<span class="badge demo">Démo</span>'}
-            </td>
-            <td>${o.flowStep || 'Réception'}</td>
-            <td>${o.issueCase || 'Aucun'}</td>
-            <td>
-              <div class="progress-text">${p.scanned}/${p.total}</div>
-              <div class="progress"><div class="progress-fill" style="width:${p.pct}%"></div></div>
-            </td>
-            <td class="actions-cell">
-              <button class="mini blue" onclick="window.viewOrder('${o.id}')">Voir</button>
-              <button class="mini green" onclick="window.loadScannerOrder('${o.id}')">Scanner</button>
-              <button class="mini red" onclick="window.removeOrder('${o.id}')">Supprimer</button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      tbody.innerHTML = rows || '<tr><td colspan="11" class="empty">Aucune commande trouvée</td></tr>';
-    }
-
-    function renderArticles() {
-      const q = $('article-search').value.toLowerCase().trim();
-      const tbody = $('articles-body');
-      const filtered = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku));
-      const rows = filtered.map(a => `
-        <tr>
-          <td><code>${a.sku}</code></td>
-          <td>${a.name}</td>
-          <td class="${a.qty <= a.threshold ? 'danger' : ''}">${a.qty}</td>
-          <td>${a.location || '—'}</td>
-          <td>${a.category || '—'}</td>
-          <td>${a.threshold ?? 0}</td>
-          <td>${money.format(a.price || 0)}</td>
-          <td>
-            <div class="art-codes">
-              <div class="art-qr-mini" id="qrmini-${a.sku}"></div>
-              <svg id="bc-${a.sku}"></svg>
-            </div>
-          </td>
-          <td class="actions-cell">
-            <button class="mini blue" onclick="event.stopPropagation();window.editArticle('${a.sku}')">Modifier</button>
-            <button class="mini orange" onclick="event.stopPropagation();window.stockMove('${a.sku}')">Entrée/Sortie</button>
-            <button class="mini green" onclick="event.stopPropagation();window.showArticleQR('${a.sku}')">🔍 QR</button>
-            <button class="mini green" onclick="event.stopPropagation();window.printArticle('${a.sku}')">🖨️ Imprimer</button>
-            <button class="mini red" onclick="event.stopPropagation();window.removeArticle('${a.sku}')">Supprimer</button>
-          </td>
-        </tr>
-      `).join('');
-      tbody.innerHTML = rows || '<tr><td colspan="9" class="empty">Aucun article</td></tr>';
-      setTimeout(() => {
-        filtered.forEach(a => {
-          const qrEl = document.getElementById('qrmini-' + a.sku);
-          if (qrEl && !qrEl.hasChildNodes()) {
-            try { new QRCode(qrEl, { text: a.sku, width: 44, height: 44, colorDark:'#1a1a1a', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e) {}
-          }
-          const bcEl = document.getElementById('bc-' + a.sku);
-          if (bcEl) {
-            try { JsBarcode(bcEl, a.sku, { format:'CODE128', width:1.2, height:28, displayValue:false, margin:2 }); } catch(e) {}
-          }
-        });
-      }, 50);
-      $('order-item-sku').innerHTML = '<option value="">Choisir un article</option>' + state.articles.map(a => `<option value="${a.sku}">${a.sku} — ${a.name}</option>`).join('');
-      window.fillScanOrders();
-    }
-
-    function renderMovements() {
-      const rows = [...state.movements].slice(0, 15).map(m => `
-        <tr>
-          <td>${formatDate(m.date)}</td>
-          <td><code>${m.sku}</code></td>
-          <td>${m.name}</td>
-          <td><span class="badge ${m.type === 'in' ? 'completed' : 'urgent'}">${m.type === 'in' ? 'Entrée' : 'Sortie'}</span></td>
-          <td>${m.qty}</td>
-          <td>${m.by || '—'}</td>
-          <td>${m.reason || '—'}</td>
-        </tr>
-      `).join('');
-      const movesHtml = rows || '<tr><td colspan="7" class="empty">Aucun mouvement enregistré</td></tr>';
-      $('moves-body').innerHTML = movesHtml;
-      if ($('moves-body-full')) $('moves-body-full').innerHTML = state.movements.map(m => `
-        <tr>
-          <td>${formatDate(m.date)}</td>
-          <td><code>${m.sku}</code></td>
-          <td>${m.name}</td>
-          <td><span class="badge ${m.type === 'in' ? 'completed' : 'urgent'}">${m.type === 'in' ? 'Entrée' : 'Sortie'}</span></td>
-          <td>${m.qty}</td>
-          <td>${m.by || '—'}</td>
-          <td>${m.reason || '—'}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>';
-    }
-
-    function renderFeedbacks() {
-      const rows = [...state.feedbacks].slice(0, 10).map(f => `
-        <tr>
-          <td>${formatDate(f.date)}</td>
-          <td>${f.user}</td>
-          <td><code>${f.orderId}</code></td>
-          <td>${Math.round(f.durationSec || 0)} sec</td>
-          <td>${f.errors || 0}</td>
-          <td>${f.resolved || 0}</td>
-          <td>${f.badge || '—'}</td>
-        </tr>
-      `).join('');
-      const fbHtml = rows || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
-      $('feedbacks-body').innerHTML = fbHtml;
-      if ($('feedbacks-body-full')) $('feedbacks-body-full').innerHTML = state.feedbacks.map(f => `
-        <tr>
-          <td>${formatDate(f.date)}</td>
-          <td>${f.user}</td>
-          <td><code>${f.orderId}</code></td>
-          <td>${Math.round(f.durationSec || 0)} sec</td>
-          <td>${f.errors || 0}</td>
-          <td>${f.resolved || 0}</td>
-          <td>${f.badge || '—'}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
-    }
-
-    function renderQR() {
-      const holder = $('qrcode');
-      holder.innerHTML = '';
-      const url = new URL('./demande.html', window.location.href).href;
-      $('qr-url').textContent = url;
-      new QRCode(holder, { text: url, width: 220, height: 220, colorDark: '#1a73e8', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
-    }
-
-    function currentScannerOrder() {
-      return state.orders.find(o => o.id === state.scannerOrderId);
-    }
-
-    let camStream = null;
-    let camInterval = null;
-
-    function showScanBlock(n) {
-      [1,2,3,4].forEach(i => {
-        const el = $('scan-block-' + i);
-        if (el) el.style.display = i === n ? 'block' : 'none';
-        const step = $('scanner-step-' + i);
-        if (step) {
-          step.classList.toggle('active', i === n);
-        }
-      });
-    }
-
-    window.resetScanner = function() {
-      window.stopCamera();
-      state.scannerOrderId = '';
-      state.scannerUser = '';
-      state.scannerScanned = {};
-      state.scannerStep = 1;
-      showScanBlock(1);
-      if ($('scan-user')) $('scan-user').value = '';
-      if ($('scan-order')) { fillScanOrders(); }
-    };
-
-    window.startCamera = async function startCamera() {
-      const video = $('cam-video');
-      const status = $('cam-status');
-      if (camStream) return;
-      try {
-        if (status) status.textContent = 'Accès à la caméra en cours...';
-        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
-        video.srcObject = camStream;
-        await video.play();
-        if (status) status.textContent = '🟢 Caméra active — pointe sur un QR code ou code-barre';
-        const canvas = $('cam-canvas');
-        const ctx = canvas.getContext('2d');
-        camInterval = setInterval(() => {
-          if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-            if (code && code.data) {
-              const sku = normalizeSku(code.data);
-              if (sku) processCameraScan(sku);
-            }
-          }
-        }, 300);
-      } catch(e) {
-        const status = $('cam-status');
-        if (status) status.textContent = '❌ Caméra non accessible : ' + e.message;
-        toast('Caméra non accessible : ' + e.message, 'err');
-      }
-    }
-
-    window.stopCamera = function stopCamera() {
-      if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-      if (camInterval) { clearInterval(camInterval); camInterval = null; }
-      const btnStart = $('btn-start-cam');
-      const btnStop = $('btn-stop-cam');
-      if (btnStart) btnStart.style.display = 'block';
-      if (btnStop) btnStop.style.display = 'none';
-    }
-
-    let lastScannedSku = '';
-    let lastScannedTime = 0;
-
-    window.processCameraScan = function processCameraScan(sku) {
-      const now = Date.now();
-      if (now - lastScannedTime < 800) return;
-      lastScannedTime = now;
-
-      const order = currentScannerOrder();
-      if (!order) return;
-
-      const item = order.items.find(i => i.sku === sku);
-      if (!item) { toast('❌ ' + sku + ' non trouvé dans cette commande', 'err'); return; }
-
-      // Toujours autoriser le scan même si déjà à la bonne quantité (erreur volontaire)
-      state.scannerScanned[sku] = (state.scannerScanned[sku] || 0) + 1;
-
-      // Flash vert sur vidéo
-      const greenFlash = $('scan-green-flash');
-      const skuOverlay = $('scan-sku-overlay');
-      if (greenFlash) {
-        greenFlash.style.display = 'block';
-        skuOverlay.style.display = 'block';
-        skuOverlay.textContent = '✓ ' + sku + ' → ' + state.scannerScanned[sku] + '/' + item.qty;
-        setTimeout(() => { greenFlash.style.display = 'none'; skuOverlay.style.display = 'none'; }, 700);
-      }
-
-      renderScanProgress();
-
-      // Vérifier si tout est scanné (au moins qty pour chaque article)
-      const allDone = order.items.every(i => (state.scannerScanned[i.sku] || 0) >= i.qty);
-      if (allDone) toast('✅ Tous les articles atteints ! Tu peux passer à la vérification.', 'ok');
-    };
-
-    
-
-    window.validateDoubleCheck = async function validateDoubleCheck() {
-      const order = currentScannerOrder();
-      if (!order) return;
-      const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
-      if (!allOk) return toast('La double vérification a détecté un écart', 'err');
-      state.scannerStep = 4;
-      showScanBlock(4);
-      window.stopCamera();
-      const durationSec = (Date.now() - state.scannerStart) / 1000;
-      const badge = state.scannerProblems === 0 ? 'Sans faute' : (state.scannerProblems <= 2 ? 'Bon contrôle' : 'À revoir');
-      const updatedItems = order.items.map(i => ({ ...i, scanned: state.scannerScanned[i.sku] || 0 }));
-      await updateDoc(doc(db, 'orders', order._docId || order.id), { items: updatedItems, status: 'completed', flowStep: 'Expédition', assignedTo: state.scannerUser });
-      for (const i of updatedItems) {
-        const art = state.articles.find(a => a.sku === i.sku);
-        if (art) {
-          const newQty = Math.max(0, Number(art.qty || 0) - Number(i.qty || 0));
-          await updateDoc(doc(db, 'articles', art.sku), { qty: newQty });
-          await saveMovement(art.sku, 'out', i.qty, state.scannerUser, `Commande ${order.id}`);
-        }
-      }
-      await addDoc(collection(db, 'feedbacks'), {
-        orderId: order.id,
-        user: state.scannerUser,
-        durationSec,
-        errors: state.scannerProblems,
-        resolved: state.scannerResolved,
-        badge,
-        date: new Date().toISOString()
-      });
-      $('scan-feedback').innerHTML = `
-        <div class="result-box">
-          <h3>Commande validée</h3>
-          <p><strong>Préparateur :</strong> ${state.scannerUser}</p>
-          <p><strong>Temps :</strong> ${Math.round(durationSec)} secondes</p>
-          <p><strong>Erreurs :</strong> ${state.scannerProblems}</p>
-          <p><strong>Blocages résolus :</strong> ${state.scannerResolved}</p>
-          <p><strong>Badge :</strong> <span class="badge completed">${badge}</span></p>
-        </div>
-      `;
-      renderScanner();
-      toast('Commande terminée');
-    }
-
-    window.backToPicking = function backToPicking() {
-      state.scannerStep = 2;
-      renderScanner();
-    }
-
-    window.loadScannerOrder = function(id) {
-      switchTab('scanner');
-      $('scan-order').value = id;
-      state.scannerOrderId = id;
-      renderScanner();
-    };
-
-    window.viewOrder = function(id) {
-      const order = state.orders.find(o => o.id === id);
-      if (!order) return;
-      const p = orderProgress(order);
-      $('modal-body').innerHTML = `
-        <div class="detail-grid">
-          <div><strong>Client</strong><br>${order.client}</div>
-          <div><strong>Date</strong><br>${formatDate(order.date)}</div>
-          <div><strong>Mode</strong><br>${order.shippingMode || '—'}</div>
-          <div><strong>Préparateur</strong><br>${order.assignedTo || '—'}</div>
-          <div><strong>Statut</strong><br>${statusLabel(order.status)}</div>
-          <div><strong>Cas</strong><br>${order.issueCase || 'Aucun'}</div>
-        </div>
-        <hr>
-        ${order.items.map(i => `<div class="mini-row"><span><code>${i.sku}</code> ${i.name}<br><small>${i.location || '—'}</small></span><strong>${i.scanned || 0}/${i.qty}</strong></div>`).join('')}
-        <hr>
-        <p><strong>Progression :</strong> ${p.scanned}/${p.total}</p>
-      `;
-      $('modal').classList.add('open');
-    };
-
-    window.showArticleQR = function(sku) {
-      const a = state.articles.find(x => x.sku === sku);
-      if (!a) return;
-      const modal = $('modal-qr');
-      const title = $('modal-qr-title');
-      const sub = $('modal-qr-sub');
-      const qrDiv = $('modal-qr-code');
-      const bcSvg = $('modal-qr-bc');
-      title.textContent = a.name;
-      title.dataset.sku = sku;
-      sub.textContent = sku + ' · ' + (a.location || '—') + ' · Stock : ' + a.qty;
-      qrDiv.innerHTML = '';
-      bcSvg.innerHTML = '';
-      modal.style.display = 'flex';
-      setTimeout(() => {
-        try { new QRCode(qrDiv, { text: sku, width: 200, height: 200, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e) {}
-        try { JsBarcode(bcSvg, sku, { format:'CODE128', width:2.5, height:70, displayValue:true, fontSize:16, margin:6 }); } catch(e) {}
-      }, 80);
-    };
-
-        window.printArticle = function(sku) {
-      const a = state.articles.find(x => x.sku === sku);
-      if (!a) return;
-      const zone = $('print-zone');
-      zone.innerHTML = '';
-      const card = document.createElement('div');
-      card.className = 'print-card';
-      card.innerHTML = `
-        <h3>${a.name}</h3>
-        <p><strong>${a.sku}</strong></p>
-        <p>${a.location || ''}</p>
-        <div id="print-qr-${sku}" style="margin:8px auto;display:inline-block"></div>
-        <br>
-        <svg id="print-bc-${sku}" style="max-width:180px"></svg>
-        <p style="margin-top:6px;font-size:10px">${a.category || ''}</p>
-      `;
-      zone.appendChild(card);
-      setTimeout(() => {
-        try { new QRCode(document.getElementById('print-qr-' + sku), { text: sku, width: 120, height: 120, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e) {}
-        try { JsBarcode(document.getElementById('print-bc-' + sku), sku, { format:'CODE128', width:2, height:60, displayValue:true, fontSize:14, margin:4 }); } catch(e) {}
-        setTimeout(() => window.print(), 300);
-      }, 100);
-    };
-
-        window.editArticle = function(sku) {
-      const a = state.articles.find(x => x.sku === sku);
-      if (!a) { alert('Article introuvable : ' + sku); return; }
-      // Forcer l'onglet articles visible
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'articles'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-articles'));
-      // Remplir le formulaire
-      $('art-sku').value = a.sku;
-      $('art-sku').readOnly = true;
-      $('art-name').value = a.name;
-      $('art-qty').value = a.qty;
-      $('art-location').value = a.location || '';
-      $('art-category').value = a.category || '';
-      $('art-threshold').value = a.threshold || 0;
-      $('art-price').value = a.price || 0;
-      // Scroll vers le formulaire
-      $('art-sku').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      $('art-name').focus();
-      toast('Article ' + sku + ' chargé — modifie et clique Enregistrer');
-    };
-
-    window.removeArticle = async function(sku) {
-      if (!confirm(`Supprimer l'article ${sku} ?`)) return;
-      await deleteDoc(doc(db, 'articles', sku));
-      toast('Article supprimé');
-    };
-
-    window.removeOrder = async function(id) {
-      if (!confirm(`Supprimer la commande ${id} ?`)) return;
-      const orderToDelete = state.orders.find(o => o.id === id);
-      await deleteDoc(doc(db, 'orders', orderToDelete?._docId || id));
-      toast('Commande supprimée');
-    };
-
-    window.stockMove = async function(sku) {
-      const art = state.articles.find(a => a.sku === sku);
-      if (!art) return;
-      const type = prompt(`Mouvement pour ${sku} : tape IN pour entrée ou OUT pour sortie`, 'OUT');
-      if (!type) return;
-      const qty = Number(prompt('Quantité ?', '1'));
-      if (!qty || qty < 1) return;
-      const by = prompt('Nom de la personne ?', 'Opérateur') || 'Opérateur';
-      const reason = prompt('Raison du mouvement ?', 'Ajustement manuel') || 'Ajustement manuel';
-      const isIn = type.toUpperCase() === 'IN';
-      const newQty = isIn ? art.qty + qty : Math.max(0, art.qty - qty);
-      await updateDoc(doc(db, 'articles', sku), { qty: newQty });
-      await saveMovement(sku, isIn ? 'in' : 'out', qty, by, reason);
-      toast('Mouvement enregistré');
-    };
-
-    window.previewScanOrder = function() {
-      const orderId = $('scan-order').value;
-      const preview = $('scan-order-preview');
-      const itemsDiv = $('scan-order-items');
-      if (!orderId) { preview.style.display = 'none'; return; }
-      const order = state.orders.find(o => o.id === orderId);
-      if (!order) { preview.style.display = 'none'; return; }
-      preview.style.display = 'block';
-      const scanned = state.scannerOrderId === orderId ? state.scannerScanned : {};
-      itemsDiv.innerHTML = order.items.map(i => {
-        const got = scanned[i.sku] || i.scanned || 0;
-        const pct = Math.min(100, Math.round((got / i.qty) * 100));
-        return `
-          <div style="padding:10px 0;border-bottom:1px solid #eef2f7">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div><strong>${i.name}</strong><br><small><code>${i.sku}</code> · ${i.location || '—'}</small></div>
-              <span style="font-weight:800;color:${got>=i.qty?'#2e7d32':'#1a73e8'}">${got}/${i.qty}</span>
-            </div>
-            <div class="progress" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${got>=i.qty?'#2e7d32':'#1a73e8'}"></div></div>
-          </div>
-        `;
-      }).join('');
-    };
-
-        function fillScanOrders() {
-      const sel = $('scan-order');
-      if (!sel) return;
-      const current = sel.value;
-      sel.innerHTML = '<option value="">Choisir une commande</option>' +
-        state.orders
-          .filter(o => ['pending','inprogress'].includes(o.status))
-          .sort((a,b) => a.id.localeCompare(b.id))
-          .map(o => `<option value="${o.id}" ${o.id === current ? 'selected' : ''}>${o.id} — ${o.client}${o.urgent ? ' ⚡' : ''}</option>`)
-          .join('');
-    }
-    window.fillScanOrders = fillScanOrders;
-
-        async function resetDemo() {
-      if (!confirm('Supprimer toutes les commandes démo et en recréer 20 nouvelles ?')) return;
-      // Supprimer commandes démo existantes
-      const snap = await getDocs(collection(db, 'orders'));
-      for (const d of snap.docs) {
-        const data = d.data();
-        if (!data.isReal) await deleteDoc(doc(db, 'orders', d.id));
-      }
-      // Recréer 20 commandes démo
-      const articles = state.articles.length ? state.articles : articleCatalog();
-      for (let i = 1; i <= 20; i++) {
-        const order = buildRandomOrder(i, articles);
-        await setDoc(doc(db, 'orders', order.id), order);
-      }
-      toast('20 commandes démo rechargées !');
-    }
-
-    function clearArticleForm() {
-      ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id => $(id).value = '');
-    }
-
-    async function saveArticle() {
-      const sku = normalizeSku($('art-sku').value);
-      const name = $('art-name').value.trim();
-      const qty = Number($('art-qty').value || 0);
-      const location = $('art-location').value.trim();
-      const category = $('art-category').value.trim() || 'Divers';
-      const threshold = Number($('art-threshold').value || 0);
-      const price = Number($('art-price').value || 0);
-      if (!sku || !name) return toast('SKU et nom requis', 'err');
-      await setDoc(doc(db, 'articles', sku), { sku, name, qty, location, category, threshold, price }, { merge: true });
-      clearArticleForm();
-      toast('Article enregistré');
-    }
-
-    async function createOrder() {
-      const client = $('order-client').value.trim();
-      const shippingMode = $('order-shipping').value;
-      const issueCase = $('order-case').value;
-      const assignedTo = $('order-assigned').value.trim();
-      const isReal = $('order-real').checked;
-      const isTrap = $('order-trap').checked;
-      const sku = $('order-item-sku').value;
-      const qty = Number($('order-item-qty').value || 1);
-      if (!client || !sku) return toast('Client et article requis', 'err');
-      const art = state.articles.find(a => a.sku === sku);
-      if (!art) return toast('Article introuvable', 'err');
-      const id = uid('CMD');
-      await setDoc(doc(db, 'orders', id), {
-        id,
-        client,
-        tracking: tracking(),
-        status: 'pending',
-        urgent: isReal,
-        isReal,
-        isTrap,
-        assignedTo,
-        shippingMode,
-        flowStep: 'Réception',
-        issueCase,
-        date: new Date().toISOString(),
-        source: 'manual',
-        items: [{ sku: art.sku, name: art.name, qty, scanned: 0, location: art.location, price: art.price || 0 }]
-      });
-      ['order-client','order-assigned'].forEach(id => $(id).value = '');
-      $('order-item-qty').value = '1';
-      $('order-real').checked = false;
-      $('order-trap').checked = false;
-      toast('Commande créée');
-    }
-
-    function renderQR() {
-      const holder = $('qrcode');
-      holder.innerHTML = '';
-      const url = new URL('./demande.html', window.location.href).href;
-      $('qr-url').textContent = url;
-      new QRCode(holder, { text: url, width: 220, height: 220, colorDark: '#1a73e8', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
-    }
-    window.saveArticle = saveArticle;
-    window.createOrder = createOrder;
-    window.clearArticleForm = clearArticleForm;
-    window.renderQR = renderQR;
-    window.resetDemo = resetDemo;
-
-        window.addEventListener('DOMContentLoaded', async () => {
-      await seedIfNeeded();
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-      $('article-search').addEventListener('input', renderArticles);
-      $('order-search').addEventListener('input', renderOrders);
-      $('order-filter').addEventListener('change', renderOrders);
-      document.addEventListener('click', e => {
-        if (e.target.id === 'btn-start-cam') window.startCamera();
-        if (e.target.id === 'btn-stop-cam') window.stopCamera();
-
-      });
-      $('close-modal').addEventListener('click', () => $('modal').classList.remove('open'));
-
-      onSnapshot(collection(db, 'articles'), snap => {
-        state.articles = snap.docs.map(d => d.data());
-        renderArticles();
-        renderStats();
-      });
-      onSnapshot(collection(db, 'orders'), snap => {
-        state.orders = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
-        renderOrders();
-        renderDashboardUrgent();
-        renderStats();
-        renderScanner();
-        fillScanOrders();
-      if ($('scan-order') && $('scan-order').value) window.previewScanOrder();
-      });
-      onSnapshot(query(collection(db, 'stock_history'), orderBy('date', 'desc')), snap => {
-        state.movements = snap.docs.map(d => d.data());
-        renderMovements();
-      });
-      onSnapshot(query(collection(db, 'feedbacks'), orderBy('date', 'desc')), snap => {
-        state.feedbacks = snap.docs.map(d => d.data());
-        renderFeedbacks();
-      });
-
-      $('order-case').innerHTML = casePool().map(c => `<option value="${c}">${c}</option>`).join('');
-      $('order-shipping').innerHTML = shippingPool().map(c => `<option value="${c}">${c}</option>`).join('');
-      renderQR();
-    });
-  </script>
   <style>
-    :root {
-      --blue:#1a73e8; --blue-soft:#e8f0fe; --green:#2e7d32; --green-soft:#e8f5e9;
-      --orange:#ef6c00; --orange-soft:#fff3e0; --red:#d93025; --red-soft:#fdecea;
-      --purple:#6a1b9a; --purple-soft:#f3e5f5; --gray:#6b7280; --bg:#f4f7fb; --card:#fff;
-      --line:#e2e8f0; --text:#1f2937; --radius:18px; --shadow:0 12px 28px rgba(17,24,39,.08);
-    }
-    *{box-sizing:border-box;margin:0;padding:0} body{font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
-    header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
-    header h1{font-size:20px} header a{color:#fff;text-decoration:none;background:rgba(255,255,255,.12);padding:10px 14px;border-radius:12px;font-weight:700}
-    .wrap{max-width:1400px;margin:20px auto;padding:0 14px 40px}.tabs{display:flex;gap:10px;flex-wrap:wrap;background:#fff;padding:10px;border-radius:18px;box-shadow:var(--shadow);margin-bottom:18px}
-    .tab-btn{border:none;background:transparent;padding:12px 16px;border-radius:12px;cursor:pointer;font-weight:800;color:#4b5563}.tab-btn.active{background:var(--blue-soft);color:var(--blue)}
-    .tab-panel{display:none}.tab-panel.active{display:block}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px}
-    .stat,.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid #edf2f7}.stat{padding:20px}.stat .v{font-size:30px;font-weight:900;color:var(--blue)}.stat .l{font-size:13px;color:#6b7280;margin-top:6px}
-    .card{padding:20px;margin-bottom:18px}.card h2{font-size:18px;color:var(--blue);margin-bottom:12px}.sub{font-size:14px;color:#6b7280;margin-bottom:14px}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.grid-3{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}.row{display:flex;gap:12px;flex-wrap:wrap}.field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:170px}.field label{font-size:13px;font-weight:700;color:#4b5563}.field input,.field select{border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;background:#fff}
-    .btn,.mini{border:none;cursor:pointer;font-weight:800;border-radius:12px}.btn{padding:12px 16px}.btn.blue{background:var(--blue);color:#fff}.btn.orange{background:var(--orange);color:#fff}.btn.gray{background:#eef2f7;color:#374151}.btn.green{background:var(--green);color:#fff}.mini{padding:8px 10px;font-size:12px}.mini.blue{background:var(--blue-soft);color:var(--blue)}.mini.red{background:var(--red-soft);color:var(--red)}.mini.green{background:var(--green-soft);color:var(--green)}.mini.orange{background:var(--orange-soft);color:var(--orange)}
-    table{width:100%;border-collapse:collapse;min-width:980px}th,td{padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:left;font-size:14px;vertical-align:middle}th{background:#f8fbff;color:var(--blue)}.table-wrap{overflow:auto}.actions-cell{display:flex;gap:8px;flex-wrap:wrap}.danger{color:var(--red);font-weight:900}
-    .badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;margin-right:5px}.badge.pending{background:var(--orange-soft);color:var(--orange)}.badge.inprogress{background:var(--blue-soft);color:var(--blue)}.badge.completed{background:var(--green-soft);color:var(--green)}.badge.cancelled,.badge.issue{background:#eee;color:#555}.badge.urgent{background:var(--red);color:#fff}.badge.real{background:var(--purple);color:#fff}.badge.demo{background:var(--green-soft);color:var(--green)}.badge.trap{background:#111827;color:#fff}
-    .progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}.progress-fill{height:100%;background:var(--blue)}.progress-text{font-size:12px;color:#6b7280;margin-bottom:4px}.mini-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #eef2f7}.mini-row:last-child{border-bottom:none}.empty,.empty-inline{color:#9ca3af;text-align:center;padding:20px}
-    .steps{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.step{padding:10px 12px;border-radius:12px;background:#eef2f7;color:#6b7280;font-weight:800}.step.active{background:var(--blue-soft);color:var(--blue)}
-    .scan-card{border:1px solid #eef2f7;border-radius:14px;padding:14px;margin-bottom:12px;background:#fbfdff}.scan-actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.scan-actions input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.scanner-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0}
-    .check-row{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;margin-bottom:10px}.check-row.ok{background:var(--green-soft);color:var(--green)}.check-row.ko{background:var(--red-soft);color:var(--red)}
-    .result-box{background:#f8fbff;border:1px solid #dbeafe;border-radius:16px;padding:16px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
-    .toast{position:fixed;right:18px;bottom:18px;background:#111827;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s;z-index:100}.toast.show{opacity:1;transform:translateY(0)}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}
-    .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:90}.modal.open{display:flex}.modal-box{background:#fff;border-radius:20px;padding:22px;width:min(780px,100%);max-height:85vh;overflow:auto}.modal-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.close-btn{border:none;background:#eef2f7;width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer}
-    #qrcode{display:inline-block;padding:16px;background:#fff;border-radius:18px;border:2px solid #eef2f7} code{font-size:12px}
-    .art-codes{display:flex;gap:8px;align-items:center}
-    .art-codes svg{width:80px;height:40px}
-    .art-qr-mini{width:44px;height:44px;display:inline-block}
-    .art-qr-mini canvas,.art-qr-mini img{width:44px!important;height:44px!important}
-    @media print{
-      body > *:not(#print-zone){display:none!important}
-      #print-zone{display:flex!important;flex-wrap:wrap;gap:16px;padding:10px}
-      .print-card{border:1px solid #ccc;border-radius:8px;padding:12px;width:200px;text-align:center;page-break-inside:avoid}
-      .print-card h3{font-size:13px;margin-bottom:6px;word-break:break-word}
-      .print-card p{font-size:11px;color:#555;margin-bottom:4px}
-    }
-    #print-zone{display:none}
-    .cam-wrap{position:relative;width:100%;max-width:400px;margin:0 auto}
-    .cam-wrap video{width:100%;border-radius:14px;border:2px solid var(--blue);display:block;background:#000;min-height:200px}
-    .cam-wrap canvas{display:none}
-    .scan-result-flash{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#2e7d32;color:#fff;padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;opacity:0;transition:.3s}
-    .scan-result-flash.show{opacity:1}
-    @media (max-width: 1000px){.grid-2,.grid-3,.detail-grid{grid-template-columns:1fr}} @media (max-width:700px){header h1{font-size:17px}.tab-btn{flex:1 1 calc(50% - 10px)}table{min-width:860px}}
+    :root{--blue:#1a73e8;--green:#2e7d32;--red:#d93025;--orange:#ef6c00;--bg:#f4f7fb;--card:#fff;--line:#e5e7eb;--text:#1f2937}
+    *{box-sizing:border-box} body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center}
+    h1{margin:0;font-size:22px}.wrap{padding:16px;max-width:1400px;margin:auto}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.tab-btn{border:none;background:#fff;padding:11px 14px;border-radius:12px;font-weight:800;cursor:pointer}.tab-btn.active{background:var(--blue);color:#fff}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .card{background:#fff;border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);border:1px solid #edf2f7;margin-bottom:16px}
+    .grid-2,.grid-3{display:grid;gap:16px}.grid-2{grid-template-columns:1fr 1fr}.grid-3{grid-template-columns:1.2fr 1fr 1fr}
+    .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.stat{background:#fff;border-radius:16px;padding:14px;border:1px solid var(--line);text-align:center}.stat b{display:block;font-size:28px;color:var(--blue)}
+    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.field label{font-size:13px;font-weight:700;color:#4b5563}.field input,.field select{border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:14px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:none;border-radius:12px;padding:12px 14px;font-weight:800;cursor:pointer}.blue{background:var(--blue);color:#fff}.green{background:var(--green);color:#fff}.red{background:var(--red);color:#fff}.orange{background:var(--orange);color:#fff}.gray{background:#eef2f7;color:#374151}
+    .table-wrap{overflow:auto} table{width:100%;border-collapse:collapse;background:#fff} th,td{padding:10px;border-bottom:1px solid #eef2f7;text-align:left;font-size:14px;vertical-align:top} th{background:#f8fafc;font-size:12px;text-transform:uppercase;color:#64748b}
+    .mini{border:none;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:800;cursor:pointer}.actions-cell{display:flex;gap:6px;flex-wrap:wrap}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800}.badge.pending{background:#fff3e0;color:#ef6c00}.badge.inprogress{background:#e8f0fe;color:#1a73e8}.badge.completed{background:#e8f5e9;color:#2e7d32}.badge.real{background:#e8f5e9;color:#2e7d32}.badge.demo{background:#ede9fe;color:#6d28d9}.badge.urgent{background:#fdecea;color:#d93025}
+    .progress{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden}.progress-fill{height:100%;background:var(--blue)}.progress-text{font-weight:800;font-size:12px;margin-bottom:4px}
+    .danger{color:var(--red);font-weight:800}.sub{color:#6b7280;font-size:13px}.empty{color:#94a3b8;text-align:center;padding:18px}
+    .toast{position:fixed;right:16px;bottom:16px;background:#111827;color:#fff;padding:12px 14px;border-radius:12px;opacity:0;transform:translateY(10px);transition:.2s;z-index:999}.toast.show{opacity:1;transform:translateY(0)}
+    .cam-box{position:relative;max-width:520px;margin:auto}.cam-box video{width:100%;display:block;background:#000;min-height:260px;border:3px solid var(--blue);border-radius:14px}.cam-ok{position:absolute;inset:0;background:rgba(46,125,50,.35);display:none;border-radius:14px;border:4px solid #2e7d32}.cam-tag{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#2e7d32;color:#fff;padding:8px 16px;border-radius:999px;font-weight:900;display:none}
+    .steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.step{padding:8px 12px;border-radius:999px;background:#eef2f7;font-weight:800;font-size:12px}.step.active{background:var(--blue);color:#fff}
+    #print-zone{display:none}.qr-mini{width:44px;height:44px}.qr-mini canvas,.qr-mini img{width:44px!important;height:44px!important}.codes{display:flex;align-items:center;gap:8px}.codes svg{width:84px;height:38px}
+    .modalx{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:99;padding:20px}.modalx .box{background:#fff;border-radius:18px;padding:22px;max-width:420px;width:100%;text-align:center}
+    @media(max-width:1000px){.grid-2,.grid-3,.stats,.row{grid-template-columns:1fr}}
+    @media print{body>*:not(#print-zone){display:none!important}#print-zone{display:flex!important;flex-wrap:wrap;gap:16px;padding:10px}.print-card{border:1px solid #ccc;border-radius:10px;padding:12px;width:220px;text-align:center;page-break-inside:avoid}.print-card h3{font-size:13px;margin:0 0 4px}.print-card p{font-size:11px;margin:0 0 6px;color:#555}}
   </style>
 </head>
 <body>
-  <header>
-    <h1>📦 WMS Logistique — Gestion</h1>
-    <a href="index.html">← Accueil</a>
-  </header>
+<header>
+  <h1>📦 WMS Logistique</h1>
+  <a href="index.html" style="color:#fff;text-decoration:none;background:rgba(255,255,255,.15);padding:10px 12px;border-radius:10px;font-weight:800">← Accueil</a>
+</header>
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" data-tab="orders" onclick="showTab('orders')">Commandes</button>
+    <button class="tab-btn" data-tab="articles" onclick="showTab('articles')">Stock</button>
+    <button class="tab-btn" data-tab="scanner" onclick="showTab('scanner')">Scanner</button>
+    <button class="tab-btn" data-tab="history" onclick="showTab('history')">Historique</button>
+    <button class="tab-btn" data-tab="qr" onclick="showTab('qr')">QR Site</button>
+  </div>
 
-  <div class="wrap">
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="dashboard">Tableau de bord</button>
-      <button class="tab-btn" data-tab="orders">Commandes</button>
-      <button class="tab-btn" data-tab="articles">Stock / Articles</button>
-      <button class="tab-btn" data-tab="scanner">Scanner</button>
-      <button class="tab-btn" data-tab="history">Historique</button>
-      <button class="tab-btn" data-tab="qr">QR Code</button>
+  <section id="tab-dashboard" class="tab-panel active">
+    <div class="stats">
+      <div class="stat"><b id="st-total">0</b>Total</div>
+      <div class="stat"><b id="st-pending">0</b>En attente</div>
+      <div class="stat"><b id="st-progress">0</b>En cours</div>
+      <div class="stat"><b id="st-done">0</b>Terminées</div>
+      <div class="stat"><b id="st-urgent">0</b>Urgentes</div>
+      <div class="stat"><b id="st-articles">0</b>Articles</div>
     </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Démo</h2>
+        <p class="sub">Recharge 20 commandes démo sans toucher aux commandes réelles.</p>
+        <button class="btn orange" onclick="resetDemo()">Réinitialiser la démo</button>
+      </div>
+      <div class="card">
+        <h2>Urgentes</h2>
+        <div id="urgent-list" class="sub">Aucune urgence</div>
+      </div>
+    </div>
+  </section>
 
-    <section id="tab-dashboard" class="tab-panel active">
-      <div class="stats">
-        <div class="stat"><div class="v" id="st-total">0</div><div class="l">Commandes totales</div></div>
-        <div class="stat"><div class="v" id="st-pending" style="color:#ef6c00">0</div><div class="l">En attente</div></div>
-        <div class="stat"><div class="v" id="st-progress">0</div><div class="l">En cours</div></div>
-        <div class="stat"><div class="v" id="st-done" style="color:#2e7d32">0</div><div class="l">Terminées</div></div>
-        <div class="stat"><div class="v" id="st-urgent" style="color:#d93025">0</div><div class="l">Urgentes</div></div>
-        <div class="stat"><div class="v" id="st-articles">0</div><div class="l">Articles</div></div>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <h2>Commandes urgentes</h2>
-          <p class="sub">Les commandes pièges restent invisibles comme pièges côté employé.</p>
-          <div id="urgent-list"></div>
-        </div>
-        <div class="card">
-          <h2>Actions rapides</h2>
-          <p class="sub">Le reset supprime uniquement les commandes de démo puis en régénère.</p>
-          <button class="btn orange" id="reset-demo" onclick="window.resetDemo()">Réinitialiser la démo</button>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <h2>Derniers feedbacks</h2>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Préparateur</th><th>Commande</th><th>Temps</th><th>Erreurs</th><th>Résolus</th><th>Badge</th></tr></thead><tbody id="feedbacks-body"></tbody></table></div>
-        </div>
-        <div class="card">
-          <h2>Historique des mouvements</h2>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>SKU</th><th>Article</th><th>Type</th><th>Qté</th><th>Par</th><th>Raison</th></tr></thead><tbody id="moves-body"></tbody></table></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-orders" class="tab-panel">
+  <section id="tab-orders" class="tab-panel">
+    <div class="grid-2">
       <div class="card">
         <h2>Créer une commande</h2>
+        <div class="field"><label>Client</label><input id="order-client"></div>
         <div class="row">
-          <div class="field"><label>Client</label><input id="order-client" placeholder="Nom du client" /></div>
-          <div class="field"><label>Préparateur assigné</label><input id="order-assigned" placeholder="Nom de l'élève" /></div>
-          <div class="field"><label>Mode de livraison</label><select id="order-shipping"></select></div>
-          <div class="field"><label>Cas de figure</label><select id="order-case"></select></div>
+          <div class="field"><label>Livraison</label><select id="order-shipping"><option>Standard</option><option>Express</option><option>Retrait dépôt</option><option>Interne</option></select></div>
+          <div class="field"><label>Cas</label><select id="order-case"><option>Aucun</option><option>Article manquant</option><option>Mauvais article</option><option>Erreur quantité</option></select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Préparateur</label><input id="order-assigned"></div>
           <div class="field"><label>Article</label><select id="order-item-sku"></select></div>
-          <div class="field" style="max-width:120px"><label>Qté</label><input id="order-item-qty" type="number" min="1" value="1" /></div>
         </div>
-        <div class="row" style="margin-top:12px;align-items:center">
-          <label><input type="checkbox" id="order-real" /> Commande réelle / urgente</label>
-          <label><input type="checkbox" id="order-trap" /> Commande piège</label>
-        </div>
-        <div style="margin-top:14px"><button class="btn blue" id="create-order" onclick="window.createOrder()">Créer la commande</button></div>
-      </div>
-      <div class="card">
-        <div class="row" style="margin-bottom:12px">
-          <div class="field"><label>Recherche</label><input id="order-search" placeholder="Commande, client, préparateur" /></div>
-          <div class="field" style="max-width:220px"><label>Filtre</label><select id="order-filter"><option value="">Tous</option><option value="pending">En attente</option><option value="inprogress">En cours</option><option value="completed">Terminée</option><option value="urgent">Urgentes</option></select></div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>ID</th><th>Client</th><th>Date</th><th>Livraison</th><th>Statut</th><th>Préparateur</th><th>Type</th><th>Module</th><th>Cas</th><th>Progression</th><th>Actions</th></tr></thead>
-            <tbody id="orders-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-articles" class="tab-panel">
-      <div class="card">
-        <h2>Ajouter / modifier un article</h2>
         <div class="row">
-          <div class="field"><label>SKU</label><input id="art-sku" placeholder="LOG-031" /></div>
-          <div class="field"><label>Nom</label><input id="art-name" placeholder="Nom de l'article" /></div>
-          <div class="field"><label>Quantité</label><input id="art-qty" type="number" min="0" /></div>
-          <div class="field"><label>Emplacement</label><input id="art-location" placeholder="Zone A - Rack 1" /></div>
-          <div class="field"><label>Catégorie</label><input id="art-category" placeholder="Fournitures" /></div>
-          <div class="field"><label>Seuil</label><input id="art-threshold" type="number" min="0" /></div>
-          <div class="field"><label>Prix</label><input id="art-price" type="number" min="0" step="0.01" /></div>
+          <div class="field"><label>Quantité</label><input id="order-item-qty" type="number" min="1" value="1"></div>
+          <div class="field"><label>Type</label><select id="order-real"><option value="real">Réelle</option><option value="demo">Démo</option></select></div>
         </div>
-        <div class="row" style="margin-top:14px"><button class="btn blue" id="save-article" onclick="window.saveArticle()">Enregistrer</button><button class="btn gray" id="clear-article" onclick="window.clearArticleForm()">Effacer</button></div>
+        <div class="field"><label><input id="order-trap" type="checkbox"> Commande piège</label></div>
+        <button class="btn blue" onclick="createOrder()">Créer la commande</button>
       </div>
       <div class="card">
-        <div class="row" style="margin-bottom:12px"><div class="field"><label>Recherche</label><input id="article-search" placeholder="SKU, nom, emplacement" /></div></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>SKU</th><th>Nom</th><th>Qté</th><th>Emplacement</th><th>Catégorie</th><th>Seuil</th><th>Prix</th><th>QR / Code-barre</th><th>Actions</th></tr></thead>
-            <tbody id="articles-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-scanner" class="tab-panel">
-      <!-- CAMÉRA TOUJOURS VISIBLE -->
-      <div class="card" style="margin-bottom:16px">
-        <h2>📷 Caméra — Scan en direct</h2>
-        <div style="position:relative;max-width:500px;margin:0 auto">
-          <video id="cam-video" autoplay playsinline muted
-            style="width:100%;display:block;border-radius:14px;background:#000;min-height:260px;border:3px solid #1a73e8">
-          </video>
-          <div id="scan-green-flash" style="
-            position:absolute;inset:0;border-radius:14px;
-            background:rgba(46,125,50,0.45);
-            display:none;pointer-events:none;
-            border:4px solid #2e7d32;
-            transition:opacity .2s;
-          "></div>
-          <div id="scan-sku-overlay" style="
-            position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
-            background:#2e7d32;color:#fff;
-            padding:8px 20px;border-radius:999px;
-            font-weight:900;font-size:16px;
-            display:none;white-space:nowrap;
-          "></div>
-        </div>
-        <canvas id="cam-canvas" style="display:none"></canvas>
-        <div id="scan-flash" style="text-align:center;font-weight:800;font-size:18px;color:#2e7d32;margin-top:10px;min-height:28px"></div>
-        <p id="cam-status" style="text-align:center;color:#666;font-size:13px;margin-top:4px">Caméra inactive</p>
-      </div>
-
-      <div class="card">
-        <h2>Scanner / Préparation</h2>
-        <div class="steps">
-          <div class="step active" id="scanner-step-1">1. Identification</div>
-          <div class="step" id="scanner-step-2">2. Picking / Scan</div>
-          <div class="step" id="scanner-step-3">3. Double vérification</div>
-          <div class="step" id="scanner-step-4">4. Confirmation</div>
-        </div>
-
-        <!-- ÉTAPE 1 : Identification -->
-        <div id="scan-block-1">
-          <div class="row">
-            <div class="field"><label>Nom et prénom</label><input id="scan-user" placeholder="Ex : Luca Martin" /></div>
-            <div class="field"><label>Commande à préparer</label><select id="scan-order" onchange="window.previewScanOrder()"></select></div>
-          </div>
-          <div id="scan-order-preview" style="margin-top:14px;display:none">
-            <div class="card" style="margin-bottom:12px;border:2px solid #1a73e8">
-              <h2>Articles à préparer</h2>
-              <div id="scan-order-items"></div>
-            </div>
-          </div>
-          <div style="margin-top:14px"><button class="btn blue" id="start-scan" onclick="window.startScanner()">Commencer la préparation</button></div>
-        </div>
-
-        <!-- ÉTAPE 2 : Picking -->
-        <div id="scan-block-2" style="display:none">
-          <div class="grid-3">
-            <div>
-              <div id="scan-current"></div>
-            </div>
-            <div>
-              <div class="card">
-                <h2>📷 Caméra</h2>
-                <p style="color:#666;font-size:13px;text-align:center">La caméra est affichée en haut de la page ↑</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ÉTAPE 3 : Double vérification -->
-        <div id="scan-block-3" style="display:none">
-          <div class="card">
-            <h2>Double vérification</h2>
-            <p class="sub">Vérifie chaque article avant de valider définitivement.</p>
-            <div id="double-check-list"></div>
-            <div class="row" style="margin-top:14px">
-              <button class="btn gray" id="back-picking" onclick="window.backToPicking()">← Revenir corriger</button>
-              <button class="btn green" id="validate-double" onclick="window.validateDoubleCheck()">✅ Valider la commande</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ÉTAPE 4 : Feedback -->
-        <div id="scan-block-4" style="display:none">
-          <div class="card">
-            <h2>Résultat</h2>
-            <div id="scan-feedback" class="sub">Le résumé apparaîtra ici après validation.</div>
-            <button class="btn blue" style="margin-top:14px" id="btn-new-scan" onclick="window.resetScanner()">🔄 Nouvelle préparation</button>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-
-    <section id="tab-history" class="tab-panel">
-      <div class="card">
-        <h2>Historique des mouvements de stock</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>SKU</th><th>Article</th><th>Type</th><th>Qté</th><th>Par</th><th>Raison</th></tr></thead>
-            <tbody id="moves-body-full"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Historique des feedbacks préparateurs</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Préparateur</th><th>Commande</th><th>Temps</th><th>Erreurs</th><th>Résolus</th><th>Badge</th></tr></thead>
-            <tbody id="feedbacks-body-full"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-qr" class="tab-panel">
-      <div class="card" style="text-align:center">
-        <h2>QR Code vers demande.html</h2>
-        <p class="sub">Le QR code ouvre directement l'interface employé pour passer une vraie commande.</p>
-        <div id="qrcode"></div>
-        <div class="sub" id="qr-url" style="margin-top:12px;word-break:break-all"></div>
-      </div>
-    </section>
-  </div>
-
-  <div id="print-zone"></div>
-
-  <!-- Modale QR Article -->
-  <div id="modal-qr" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:95;padding:20px">
-    <div style="background:#fff;border-radius:20px;padding:28px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.3)">
-      <h3 id="modal-qr-title" style="color:#1a73e8;margin-bottom:6px;font-size:20px"></h3>
-      <p id="modal-qr-sub" style="color:#6b7280;font-size:13px;margin-bottom:16px"></p>
-      <div id="modal-qr-code" style="display:inline-block;padding:12px;background:#fff;border-radius:12px;border:2px solid #e2e8f0;margin-bottom:12px"></div>
-      <br>
-      <svg id="modal-qr-bc" style="max-width:320px;width:100%"></svg>
-      <div style="margin-top:16px;display:flex;gap:10px;justify-content:center">
-        <button class="btn green" onclick="window.printArticle(document.getElementById('modal-qr-title').dataset.sku)">🖨️ Imprimer</button>
-        <button class="btn gray" onclick="document.getElementById('modal-qr').style.display='none'">Fermer</button>
+        <h2>Liste des commandes</h2>
+        <div class="row"><input id="order-search" placeholder="Rechercher" oninput="renderOrders()"><select id="order-filter" onchange="renderOrders()"><option value="">Tous</option><option value="pending">En attente</option><option value="inprogress">En cours</option><option value="completed">Terminées</option><option value="urgent">Urgentes</option></select></div>
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>Client</th><th>Date</th><th>Livraison</th><th>Statut</th><th>Préparateur</th><th>Type</th><th>Étape</th><th>Cas</th><th>Progression</th><th>Actions</th></tr></thead><tbody id="orders-body"></tbody></table></div>
       </div>
     </div>
-  </div>
+  </section>
 
-    <div id="modal" class="modal">
-    <div class="modal-box">
-      <div class="modal-top"><h3>Détail commande</h3><button class="close-btn" id="close-modal">✕</button></div>
-      <div id="modal-body"></div>
+  <section id="tab-articles" class="tab-panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Ajouter / Modifier un article</h2>
+        <div class="row"><div class="field"><label>SKU</label><input id="art-sku"></div><div class="field"><label>Nom</label><input id="art-name"></div></div>
+        <div class="row"><div class="field"><label>Quantité</label><input id="art-qty" type="number" min="0"></div><div class="field"><label>Emplacement</label><input id="art-location"></div></div>
+        <div class="row"><div class="field"><label>Catégorie</label><input id="art-category"></div><div class="field"><label>Seuil</label><input id="art-threshold" type="number" min="0"></div></div>
+        <div class="field"><label>Prix</label><input id="art-price" type="number" min="0" step="0.01"></div>
+        <div class="actions-cell"><button class="btn blue" onclick="saveArticle()">Enregistrer</button><button class="btn gray" onclick="clearArticleForm()">Effacer</button></div>
+      </div>
+      <div class="card">
+        <h2>Stock</h2>
+        <input id="article-search" placeholder="Rechercher un article" oninput="renderArticles()">
+        <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Nom</th><th>Qté</th><th>Empl.</th><th>Catégorie</th><th>Seuil</th><th>Prix</th><th>Codes</th><th>Actions</th></tr></thead><tbody id="articles-body"></tbody></table></div>
+      </div>
     </div>
-  </div>
-  <div id="toast" class="toast"></div>
+  </section>
+
+  <section id="tab-scanner" class="tab-panel">
+    <div class="card">
+      <h2>Caméra</h2>
+      <div class="cam-box">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div id="cam-ok" class="cam-ok"></div>
+        <div id="cam-tag" class="cam-tag"></div>
+      </div>
+      <p id="cam-status" class="sub" style="text-align:center">Caméra inactive</p>
+    </div>
+    <div class="card">
+      <h2>Scanner / Préparation</h2>
+      <div class="steps"><div class="step active" id="scanner-step-1">1. Identification</div><div class="step" id="scanner-step-2">2. Picking</div><div class="step" id="scanner-step-3">3. Double check</div><div class="step" id="scanner-step-4">4. Validation</div></div>
+      <div id="scan-step-1">
+        <div class="row"><div class="field"><label>Nom</label><input id="scan-user"></div><div class="field"><label>Commande</label><select id="scan-order" onchange="previewScanOrder()"></select></div></div>
+        <div id="scan-order-preview" style="display:none" class="card"><h2>Articles à préparer</h2><div id="scan-order-items"></div></div>
+        <button class="btn blue" onclick="startScanner()">Commencer</button>
+      </div>
+      <div id="scan-step-2" style="display:none"><div id="scan-current"></div></div>
+      <div id="scan-step-3" style="display:none"><div id="double-check-list"></div><div class="actions-cell"><button class="btn gray" onclick="backToPicking()">Retour</button><button class="btn green" onclick="validateDoubleCheck()">Valider</button></div></div>
+      <div id="scan-step-4" style="display:none"><div id="scan-feedback"></div><button class="btn blue" onclick="resetScanner()">Nouvelle préparation</button></div>
+    </div>
+  </section>
+
+  <section id="tab-history" class="tab-panel">
+    <div class="card"><h2>Mouvements de stock</h2><div class="table-wrap"><table><thead><tr><th>Date</th><th>SKU</th><th>Article</th><th>Type</th><th>Qté</th><th>Par</th><th>Raison</th></tr></thead><tbody id="moves-body-full"></tbody></table></div></div>
+    <div class="card"><h2>Feedbacks</h2><div class="table-wrap"><table><thead><tr><th>Date</th><th>Préparateur</th><th>Commande</th><th>Temps</th><th>Erreurs</th><th>Résolus</th><th>Badge</th></tr></thead><tbody id="feedbacks-body-full"></tbody></table></div></div>
+  </section>
+
+  <section id="tab-qr" class="tab-panel">
+    <div class="card"><h2>QR Code du site</h2><div id="qrcode"></div><p class="sub">https://ludo-ops.github.io/wms-logistique/</p></div>
+  </section>
+</div>
+
+<div id="modal-qr" class="modalx"><div class="box"><h3 id="modal-qr-title"></h3><p id="modal-qr-sub" class="sub"></p><div id="modal-qr-code" style="display:inline-block;padding:10px;border:1px solid #e5e7eb;border-radius:12px"></div><div style="margin-top:10px"><svg id="modal-qr-bc" style="width:100%"></svg></div><div class="actions-cell" style="justify-content:center;margin-top:14px"><button class="btn green" onclick="printArticle(document.getElementById('modal-qr-title').dataset.sku)">Imprimer</button><button class="btn gray" onclick="document.getElementById('modal-qr').style.display='none'">Fermer</button></div></div></div>
+<div id="print-zone"></div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = { apiKey:"AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo", authDomain:"wms-logistique.firebaseapp.com", projectId:"wms-logistique", storageBucket:"wms-logistique.firebasestorage.app", messagingSenderId:"34951077064", appId:"1:34951077064:web:e6c2633e4a59bae8f1d9fd" };
+const app = initializeApp(firebaseConfig); const db = getFirestore(app);
+const $ = id => document.getElementById(id);
+const money = new Intl.NumberFormat('fr-BE',{style:'currency',currency:'EUR'});
+const state = { orders:[], articles:[], movements:[], feedbacks:[], scannerOrderId:'', scannerUser:'', scannerScanned:{}, scannerStart:0, scannerStep:1 };
+let camStream=null, camLoop=null, lastScan=0;
+
+function toast(m,t='ok'){ const el=$('toast'); el.textContent=m; el.className='toast show'; el.style.background=t==='err'?'#d93025':'#2e7d32'; clearTimeout(window._t); window._t=setTimeout(()=>el.className='toast',2500); }
+function showTab(name){ document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name)); document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name)); if(name==='qr') renderQR(); if(name==='scanner') startCamera(); }
+window.showTab=showTab;
+function formatDate(d){ return new Date(d).toLocaleString('fr-BE'); }
+function normalizeSku(v){ if(!v) return ''; return v.toUpperCase().trim().replace(/\s+/g,'-'); }
+function statusLabel(s){ return ({pending:'En attente',inprogress:'En cours',completed:'Terminée'})[s]||s; }
+function currentScannerOrder(){ return state.orders.find(o=>o.id===state.scannerOrderId); }
+function orderProgress(o){ const total=o.items.reduce((s,i)=>s+i.qty,0); const scanned=o.items.reduce((s,i)=>s+(i.scanned||0),0); return {total,scanned,pct:total?Math.round(scanned/total*100):0}; }
+
+function articleCatalog(){ return [
+{sku:'OUT-001',name:'Marteau',qty:14,location:'A-01',category:'Outils',threshold:3,price:12.5},{sku:'OUT-002',name:'Tournevis plat',qty:20,location:'A-02',category:'Outils',threshold:4,price:4.2},{sku:'OUT-003',name:'Tournevis cruciforme',qty:18,location:'A-03',category:'Outils',threshold:4,price:4.5},{sku:'EPI-001',name:'Casque sécurité',qty:12,location:'B-01',category:'EPI',threshold:2,price:15},{sku:'EPI-002',name:'Gants manutention',qty:40,location:'B-02',category:'EPI',threshold:6,price:3.5},{sku:'BUR-001',name:'Ramette papier',qty:25,location:'C-01',category:'Fournitures',threshold:5,price:5.9},{sku:'BUR-002',name:'Stylo bleu',qty:80,location:'C-02',category:'Fournitures',threshold:10,price:1.2},{sku:'EMB-001',name:'Carton moyen',qty:35,location:'D-01',category:'Emballage',threshold:7,price:1.8},{sku:'EMB-002',name:'Ruban adhésif',qty:28,location:'D-02',category:'Emballage',threshold:5,price:2.4},{sku:'MAT-001',name:'Plaque PVC',qty:16,location:'E-01',category:'Matériaux',threshold:3,price:9.9},{sku:'MAT-002',name:'Tube aluminium',qty:22,location:'E-02',category:'Matériaux',threshold:4,price:7.6},{sku:'OUT-004',name:'Clé à molette',qty:10,location:'A-04',category:'Outils',threshold:2,price:8.9},{sku:'EPI-003',name:'Lunettes protection',qty:24,location:'B-03',category:'EPI',threshold:4,price:6.5},{sku:'DIV-001',name:'Badge visiteur',qty:50,location:'F-01',category:'Divers',threshold:8,price:0.6}
+]; }
+function rand(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+function buildRandomOrder(i, arts){ const count = 1+Math.floor(Math.random()*3); const selected=[...arts].sort(()=>Math.random()-0.5).slice(0,count); return { id:'DEMO-'+String(i).padStart(3,'0'), client:rand(['Atelier Alpha','Service RH','Magasin central','Employé interne','Pôle formation']), tracking:'TRK-'+Math.random().toString(36).slice(2,10).toUpperCase(), status:'pending', urgent:Math.random()<0.25, isReal:false, isTrap:Math.random()<0.2, assignedTo:'', shippingMode:rand(['Standard','Express','Retrait dépôt','Interne']), flowStep:'Réception', issueCase:rand(['Aucun','Aucun','Aucun','Article manquant','Erreur quantité']), date:new Date().toISOString(), items:selected.map(a=>({sku:a.sku,name:a.name,qty:1+Math.floor(Math.random()*3),scanned:0,location:a.location,price:a.price})) }; }
+
+async function seedIfNeeded(){ const metaRef=doc(db,'meta','settings'); const snap=await getDoc(metaRef); if(snap.exists()) return; const arts=articleCatalog(); for(const a of arts) await setDoc(doc(db,'articles',a.sku),a); for(let i=1;i<=20;i++){ const o=buildRandomOrder(i,arts); await setDoc(doc(db,'orders',o.id),o);} await setDoc(metaRef,{seeded:true,createdAt:new Date().toISOString()}); }
+async function resetDemo(){ if(!confirm('Recharger 20 commandes démo ?')) return; const snap=await getDocs(collection(db,'orders')); for(const d of snap.docs){ const data=d.data(); if(!data.isReal) await deleteDoc(doc(db,'orders',d.id)); } const arts=state.articles.length?state.articles:articleCatalog(); for(let i=1;i<=20;i++){ const o=buildRandomOrder(i,arts); await setDoc(doc(db,'orders',o.id),o);} toast('Démo rechargée'); }
+window.resetDemo=resetDemo;
+
+function clearArticleForm(){ ['art-sku','art-name','art-qty','art-location','art-category','art-threshold','art-price'].forEach(id=>$(id).value=''); $('art-sku').readOnly=false; }
+window.clearArticleForm=clearArticleForm;
+async function saveArticle(){ const sku=normalizeSku($('art-sku').value), name=$('art-name').value.trim(), qty=Number($('art-qty').value||0), location=$('art-location').value.trim(), category=$('art-category').value.trim()||'Divers', threshold=Number($('art-threshold').value||0), price=Number($('art-price').value||0); if(!sku||!name) return toast('SKU et nom requis','err'); await setDoc(doc(db,'articles',sku),{sku,name,qty,location,category,threshold,price},{merge:true}); clearArticleForm(); toast('Article enregistré'); }
+window.saveArticle=saveArticle;
+window.editArticle=function(sku){ const a=state.articles.find(x=>x.sku===sku); if(!a) return; showTab('articles'); $('art-sku').value=a.sku; $('art-sku').readOnly=true; $('art-name').value=a.name; $('art-qty').value=a.qty; $('art-location').value=a.location||''; $('art-category').value=a.category||''; $('art-threshold').value=a.threshold||0; $('art-price').value=a.price||0; $('art-sku').scrollIntoView({behavior:'smooth',block:'center'}); };
+window.stockMove=async function(sku){ const a=state.articles.find(x=>x.sku===sku); if(!a) return; const type=(prompt('IN pour entrée / OUT pour sortie','OUT')||'').toUpperCase(); if(!['IN','OUT'].includes(type)) return; const qty=Number(prompt('Quantité','1')); if(!qty||qty<1) return; const by=prompt('Par qui ?','formateur')||'formateur'; const reason=prompt('Raison ?','mouvement manuel')||'mouvement manuel'; const next=type==='IN'?a.qty+qty:Math.max(0,a.qty-qty); await updateDoc(doc(db,'articles',sku),{qty:next}); await addDoc(collection(db,'stock_history'),{sku,name:a.name,type:type==='IN'?'in':'out',qty,by,reason,date:new Date().toISOString()}); toast('Mouvement enregistré'); };
+window.removeArticle=async function(sku){ if(!confirm('Supprimer '+sku+' ?')) return; await deleteDoc(doc(db,'articles',sku)); toast('Article supprimé'); };
+
+async function createOrder(){ const client=$('order-client').value.trim(), shippingMode=$('order-shipping').value, issueCase=$('order-case').value, assignedTo=$('order-assigned').value.trim(), kind=$('order-real').value, isTrap=$('order-trap').checked, sku=$('order-item-sku').value, qty=Number($('order-item-qty').value||1); if(!client||!sku) return toast('Client et article requis','err'); const art=state.articles.find(a=>a.sku===sku); if(!art) return toast('Article introuvable','err'); const id=(kind==='real'?'CMD':'DEMO')+'-'+Date.now(); const order={ id, client, tracking:'TRK-'+Math.random().toString(36).slice(2,10).toUpperCase(), status:'pending', urgent:shippingMode==='Express', isReal:kind==='real', isTrap, assignedTo, shippingMode, flowStep:'Réception', issueCase, date:new Date().toISOString(), items:[{sku:art.sku,name:art.name,qty,scanned:0,location:art.location,price:art.price}]}; await setDoc(doc(db,'orders',id),order); $('order-client').value=''; $('order-assigned').value=''; $('order-item-qty').value=1; $('order-trap').checked=false; toast('Commande créée'); }
+window.createOrder=createOrder;
+window.removeOrder=async function(id){ if(!confirm('Supprimer '+id+' ?')) return; const o=state.orders.find(x=>x.id===id); await deleteDoc(doc(db,'orders',o?._docId||id)); toast('Commande supprimée'); };
+window.loadScannerOrder=function(id){ showTab('scanner'); $('scan-order').value=id; previewScanOrder(); };
+window.viewOrder=function(id){ const o=state.orders.find(x=>x.id===id); if(!o) return; alert(o.id+'\n'+o.client+'\n'+o.items.map(i=>i.sku+' x'+i.qty).join('\n')); };
+
+function renderStats(){ $('st-total').textContent=state.orders.length; $('st-pending').textContent=state.orders.filter(o=>o.status==='pending').length; $('st-progress').textContent=state.orders.filter(o=>o.status==='inprogress').length; $('st-done').textContent=state.orders.filter(o=>o.status==='completed').length; $('st-urgent').textContent=state.orders.filter(o=>o.urgent&&o.status!=='completed').length; $('st-articles').textContent=state.articles.length; $('urgent-list').innerHTML=state.orders.filter(o=>o.urgent&&o.status!=='completed').map(o=>'<div><b>'+o.id+'</b> — '+o.client+'</div>').join('')||'<span class="sub">Aucune urgence</span>'; }
+function renderOrders(){ const q=($('order-search').value||'').toLowerCase().trim(), f=$('order-filter').value; $('orders-body').innerHTML=state.orders.filter(o=>{const okQ=!q||o.id.toLowerCase().includes(q)||o.client.toLowerCase().includes(q)|| (o.assignedTo||'').toLowerCase().includes(q); const okF=!f||(f==='urgent'?o.urgent:o.status===f); return okQ&&okF;}).sort((a,b)=>a.id.localeCompare(b.id)).map(o=>{ const p=orderProgress(o); return `<tr><td><code>${o.id}</code></td><td>${o.client}</td><td>${formatDate(o.date)}</td><td>${o.shippingMode||'—'}</td><td><span class="badge ${o.status}">${statusLabel(o.status)}</span></td><td>${o.assignedTo||'—'}</td><td>${o.urgent?'<span class="badge urgent">URGENT</span> ':''}${o.isReal?'<span class="badge real">Réelle</span>':'<span class="badge demo">Démo</span>'}</td><td>${o.flowStep||'Réception'}</td><td>${o.issueCase||'Aucun'}</td><td><div class="progress-text">${p.scanned}/${p.total}</div><div class="progress"><div class="progress-fill" style="width:${p.pct}%"></div></div></td><td class="actions-cell"><button class="mini blue" onclick="viewOrder('${o.id}')">Voir</button><button class="mini green" onclick="loadScannerOrder('${o.id}')">Scanner</button><button class="mini red" onclick="removeOrder('${o.id}')">Supprimer</button></td></tr>`; }).join('') || '<tr><td colspan="11" class="empty">Aucune commande trouvée</td></tr>'; fillScanOrders(); }
+function renderArticles(){ const q=($('article-search').value||'').toLowerCase().trim(); const filtered=state.articles.filter(a=>!q||a.sku.toLowerCase().includes(q)||a.name.toLowerCase().includes(q)||(a.location||'').toLowerCase().includes(q)).sort((a,b)=>a.sku.localeCompare(b.sku)); $('articles-body').innerHTML=filtered.map(a=>`<tr><td><code>${a.sku}</code></td><td>${a.name}</td><td class="${a.qty<=a.threshold?'danger':''}">${a.qty}</td><td>${a.location||'—'}</td><td>${a.category||'—'}</td><td>${a.threshold||0}</td><td>${money.format(a.price||0)}</td><td><div class="codes"><div class="qr-mini" id="qr-${a.sku}"></div><svg id="bc-${a.sku}"></svg></div></td><td class="actions-cell"><button class="mini blue" onclick="editArticle('${a.sku}')">Modifier</button><button class="mini orange" onclick="stockMove('${a.sku}')">Entrée/Sortie</button><button class="mini green" onclick="showArticleQR('${a.sku}')">QR</button><button class="mini green" onclick="printArticle('${a.sku}')">Imprimer</button><button class="mini red" onclick="removeArticle('${a.sku}')">Supprimer</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty">Aucun article</td></tr>'; $('order-item-sku').innerHTML='<option value="">Choisir un article</option>'+state.articles.map(a=>`<option value="${a.sku}">${a.sku} — ${a.name}</option>`).join(''); setTimeout(()=>filtered.forEach(a=>{ const q=$('qr-'+a.sku); if(q&&!q.hasChildNodes()) new QRCode(q,{text:a.sku,width:44,height:44}); try{ JsBarcode($('bc-'+a.sku),a.sku,{format:'CODE128',width:1.2,height:28,displayValue:false,margin:2}); }catch(e){} }),50); }
+window.showArticleQR=function(sku){ const a=state.articles.find(x=>x.sku===sku); if(!a) return; $('modal-qr').style.display='flex'; $('modal-qr-title').textContent=a.name; $('modal-qr-title').dataset.sku=sku; $('modal-qr-sub').textContent=sku+' · '+(a.location||'—')+' · Stock : '+a.qty; $('modal-qr-code').innerHTML=''; $('modal-qr-bc').innerHTML=''; setTimeout(()=>{ new QRCode($('modal-qr-code'),{text:sku,width:200,height:200}); try{JsBarcode($('modal-qr-bc'),sku,{format:'CODE128',width:2.5,height:70,displayValue:true,margin:6});}catch(e){} },50); };
+window.printArticle=function(sku){ const a=state.articles.find(x=>x.sku===sku); if(!a) return; const z=$('print-zone'); z.innerHTML=''; const card=document.createElement('div'); card.className='print-card'; card.innerHTML=`<h3>${a.name}</h3><p><strong>${a.sku}</strong></p><p>${a.location||''}</p><div id="pqr"></div><svg id="pbc"></svg>`; z.appendChild(card); setTimeout(()=>{ new QRCode($('pqr'),{text:sku,width:120,height:120}); try{JsBarcode($('pbc'),sku,{format:'CODE128',width:2,height:60,displayValue:true,margin:4});}catch(e){} setTimeout(()=>window.print(),250); },80); };
+function renderHistory(){ $('moves-body-full').innerHTML=state.movements.map(m=>`<tr><td>${formatDate(m.date)}</td><td><code>${m.sku}</code></td><td>${m.name}</td><td>${m.type==='in'?'Entrée':'Sortie'}</td><td>${m.qty}</td><td>${m.by||'—'}</td><td>${m.reason||'—'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>'; $('feedbacks-body-full').innerHTML=state.feedbacks.map(f=>`<tr><td>${formatDate(f.date)}</td><td>${f.user}</td><td><code>${f.orderId}</code></td><td>${Math.round(f.durationSec||0)} sec</td><td>${f.errors||0}</td><td>${f.resolved||0}</td><td>${f.badge||'—'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Aucun feedback</td></tr>'; }
+function renderQR(){ $('qrcode').innerHTML=''; new QRCode($('qrcode'),{text:'https://ludo-ops.github.io/wms-logistique/',width:220,height:220}); }
+window.renderQR=renderQR;
+
+function fillScanOrders(){ const cur=$('scan-order').value; $('scan-order').innerHTML='<option value="">Choisir une commande</option>'+state.orders.filter(o=>['pending','inprogress'].includes(o.status)).sort((a,b)=>a.id.localeCompare(b.id)).map(o=>`<option value="${o.id}" ${o.id===cur?'selected':''}>${o.id} — ${o.client}${o.urgent?' ⚡':''}</option>`).join(''); }
+function previewScanOrder(){ const id=$('scan-order').value, p=$('scan-order-preview'), box=$('scan-order-items'); if(!id){p.style.display='none'; return;} const o=state.orders.find(x=>x.id===id); if(!o){p.style.display='none'; return;} p.style.display='block'; const scanned=state.scannerOrderId===id?state.scannerScanned:{}; box.innerHTML=o.items.map(i=>{ const got=scanned[i.sku]||i.scanned||0; const pct=Math.min(100,Math.round(got/i.qty*100)); return `<div style="padding:10px 0;border-bottom:1px solid #eef2f7"><div style="display:flex;justify-content:space-between"><div><b>${i.name}</b><br><small><code>${i.sku}</code> · ${i.location||'—'}</small></div><span style="font-weight:900;color:${got>=i.qty?'#2e7d32':'#1a73e8'}">${got}/${i.qty}</span></div><div class="progress" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${got>=i.qty?'#2e7d32':'#1a73e8'}"></div></div></div>`; }).join(''); }
+window.previewScanOrder=previewScanOrder;
+function setScanStep(n){ [1,2,3,4].forEach(i=>{ $('scanner-step-'+i).classList.toggle('active',i===n); $('scan-step-'+i).style.display=i===n?'block':'none'; }); state.scannerStep=n; }
+async function startScanner(){ const user=$('scan-user').value.trim(), id=$('scan-order').value; if(!user||!id) return toast('Nom et commande requis','err'); const o=state.orders.find(x=>x.id===id); if(!o) return; state.scannerUser=user; state.scannerOrderId=id; state.scannerScanned={}; o.items.forEach(i=>state.scannerScanned[i.sku]=i.scanned||0); state.scannerStart=Date.now(); setScanStep(2); await updateDoc(doc(db,'orders',o._docId||o.id),{assignedTo:user,status:'inprogress',flowStep:'Préparation'}); renderScanProgress(); startCamera(); toast('Préparation lancée'); }
+window.startScanner=startScanner;
+function renderScanProgress(){ const o=currentScannerOrder(); if(!o) return; $('scan-current').innerHTML=`<div class="card"><h2>Articles à scanner</h2>${o.items.map(i=>{ const got=state.scannerScanned[i.sku]||0; const over=got>i.qty, done=got===i.qty; const color=over?'#ef6c00':done?'#2e7d32':'#1a73e8'; const pct=Math.min(100,Math.round(got/i.qty*100)); return `<div style="padding:12px 0;border-bottom:1px solid #f1f5f9"><div style="display:flex;justify-content:space-between;align-items:center"><div><b>${i.name}</b><br><small><code>${i.sku}</code> · ${i.location||'—'}</small></div><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:900;font-size:18px;color:${color}">${got}/${i.qty}</span>${got>0?`<button class="mini red" onclick="removeScan('${i.sku}')">-1</button>`:''}</div></div><div class="progress" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>${over?`<div style="font-size:12px;color:#ef6c00;font-weight:800;margin-top:4px">Trop scanné (+${got-i.qty})</div>`:''}</div>`; }).join('')}<button class="btn gray" onclick="goDoubleCheck()">Passer au double check</button></div>`; previewScanOrder(); }
+window.removeScan=function(sku){ if(!state.scannerScanned[sku]) return; state.scannerScanned[sku]--; if(state.scannerScanned[sku]<=0) delete state.scannerScanned[sku]; renderScanProgress(); };
+window.goDoubleCheck=function(){ setScanStep(3); renderDoubleCheck(); };
+function renderDoubleCheck(){ const o=currentScannerOrder(); if(!o) return; const allOk=o.items.every(i=>(state.scannerScanned[i.sku]||0)===i.qty); $('double-check-list').innerHTML=`<div style="margin-bottom:14px;padding:12px;border-radius:12px;background:${allOk?'#e8f5e9':'#fff3e0'};border:2px solid ${allOk?'#2e7d32':'#ef6c00'};text-align:center;font-weight:800;color:${allOk?'#2e7d32':'#ef6c00'}">${allOk?'Tout est correct':'Vérifie les écarts avant validation'}</div>${o.items.map(i=>{ const got=state.scannerScanned[i.sku]||0; const ok=got===i.qty; const pct=Math.min(100,Math.round(got/i.qty*100)); return `<div style="padding:12px;margin-bottom:10px;border-radius:14px;background:${ok?'#e8f5e9':'#fdecea'};border:2px solid ${ok?'#2e7d32':'#d93025'}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div><div style="font-weight:800">${i.name}</div><div style="font-size:12px;color:#555"><code>${i.sku}</code> · ${i.location||'—'}</div></div><div style="font-size:22px;font-weight:900;color:${ok?'#2e7d32':'#d93025'}">${ok?'✅':'❌'}</div></div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Scanné : <b>${got}</b></span><span>Attendu : <b>${i.qty}</b></span><span style="font-weight:800;color:${ok?'#2e7d32':'#d93025'}">${ok?'OK':got>i.qty?'TROP (+'+(got-i.qty)+')':'MANQUE ('+(i.qty-got)+')'}</span></div><div class="progress"><div class="progress-fill" style="width:${pct}%;background:${ok?'#2e7d32':'#d93025'}"></div></div></div>`; }).join('')}`; }
+function backToPicking(){ setScanStep(2); renderScanProgress(); }
+window.backToPicking=backToPicking;
+async function validateDoubleCheck(){ const o=currentScannerOrder(); if(!o) return; const updated=o.items.map(i=>({...i,scanned:state.scannerScanned[i.sku]||0})); const errors=updated.reduce((s,i)=>s+(Math.abs((i.scanned||0)-i.qty)),0); await updateDoc(doc(db,'orders',o._docId||o.id),{items:updated,status:'completed',flowStep:'Expédition',assignedTo:state.scannerUser}); await addDoc(collection(db,'feedbacks'),{date:new Date().toISOString(),user:state.scannerUser,orderId:o.id,durationSec:(Date.now()-state.scannerStart)/1000,errors,resolved:Object.keys(state.scannerScanned).length,badge:errors===0?'Sans faute':errors<=2?'Correct':'À revoir'}); $('scan-feedback').innerHTML=`<div class="card"><h2>Commande validée</h2><p><b>Commande :</b> ${o.id}</p><p><b>Préparateur :</b> ${state.scannerUser}</p><p><b>Erreurs :</b> ${errors}</p></div>`; setScanStep(4); stopCamera(); toast('Commande validée'); }
+window.validateDoubleCheck=validateDoubleCheck;
+function resetScanner(){ stopCamera(); state.scannerOrderId=''; state.scannerUser=''; state.scannerScanned={}; $('scan-user').value=''; $('scan-order').value=''; $('scan-order-preview').style.display='none'; $('scan-current').innerHTML=''; $('double-check-list').innerHTML=''; $('scan-feedback').innerHTML=''; setScanStep(1); }
+window.resetScanner=resetScanner;
+
+async function startCamera(){ const video=$('cam-video'), status=$('cam-status'); if(camStream) return; try{ status.textContent='Demande accès caméra...'; camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}}); video.srcObject=camStream; await video.play(); status.textContent='Caméra active'; const canvas=document.createElement('canvas'); const ctx=canvas.getContext('2d'); camLoop=setInterval(()=>{ if(video.readyState===video.HAVE_ENOUGH_DATA){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0); const img=ctx.getImageData(0,0,canvas.width,canvas.height); const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'}); if(code&&code.data) processCameraScan(normalizeSku(code.data)); } },180); }catch(e){ status.textContent='Caméra refusée ou indisponible'; } }
+window.startCamera=startCamera;
+function stopCamera(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } if(camLoop){ clearInterval(camLoop); camLoop=null; } $('cam-status').textContent='Caméra inactive'; }
+window.stopCamera=stopCamera;
+function processCameraScan(sku){ const now=Date.now(); if(now-lastScan<800) return; lastScan=now; const o=currentScannerOrder(); if(!o) return; const item=o.items.find(i=>i.sku===sku); if(!item) return toast('Article '+sku+' absent de la commande','err'); state.scannerScanned[sku]=(state.scannerScanned[sku]||0)+1; $('cam-ok').style.display='block'; $('cam-tag').style.display='block'; $('cam-tag').textContent='✓ '+sku+' → '+state.scannerScanned[sku]+'/'+item.qty; setTimeout(()=>{ $('cam-ok').style.display='none'; $('cam-tag').style.display='none'; },700); renderScanProgress(); }
+window.processCameraScan=processCameraScan;
+
+await seedIfNeeded();
+onSnapshot(collection(db,'articles'), snap=>{ state.articles=snap.docs.map(d=>d.data()); renderArticles(); renderStats(); });
+onSnapshot(collection(db,'orders'), snap=>{ state.orders=snap.docs.map(d=>({...d.data(),_docId:d.id})); renderOrders(); renderStats(); previewScanOrder(); });
+onSnapshot(query(collection(db,'stock_history'),orderBy('date','desc')), snap=>{ state.movements=snap.docs.map(d=>d.data()); renderHistory(); });
+onSnapshot(query(collection(db,'feedbacks'),orderBy('date','desc')), snap=>{ state.feedbacks=snap.docs.map(d=>d.data()); renderHistory(); });
+renderQR();
+</script>
 </body>
 </html>
