@@ -224,7 +224,6 @@
             <td>
               ${o.urgent ? '<span class="badge urgent">URGENT</span>' : ''}
               ${o.isReal ? '<span class="badge real">Réelle</span>' : '<span class="badge demo">Démo</span>'}
-              ${o.isTrap ? '<span class="badge trap">Piège</span>' : ''}
             </td>
             <td>${o.flowStep || 'Réception'}</td>
             <td>${o.issueCase || 'Aucun'}</td>
@@ -279,7 +278,19 @@
           <td>${m.reason || '—'}</td>
         </tr>
       `).join('');
-      $('moves-body').innerHTML = rows || '<tr><td colspan="7" class="empty">Aucun mouvement enregistré</td></tr>';
+      const movesHtml = rows || '<tr><td colspan="7" class="empty">Aucun mouvement enregistré</td></tr>';
+      $('moves-body').innerHTML = movesHtml;
+      if ($('moves-body-full')) $('moves-body-full').innerHTML = state.movements.map(m => `
+        <tr>
+          <td>${formatDate(m.date)}</td>
+          <td><code>${m.sku}</code></td>
+          <td>${m.name}</td>
+          <td><span class="badge ${m.type === 'in' ? 'completed' : 'urgent'}">${m.type === 'in' ? 'Entrée' : 'Sortie'}</span></td>
+          <td>${m.qty}</td>
+          <td>${m.by || '—'}</td>
+          <td>${m.reason || '—'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>';
     }
 
     function renderFeedbacks() {
@@ -294,7 +305,19 @@
           <td>${f.badge || '—'}</td>
         </tr>
       `).join('');
-      $('feedbacks-body').innerHTML = rows || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
+      const fbHtml = rows || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
+      $('feedbacks-body').innerHTML = fbHtml;
+      if ($('feedbacks-body-full')) $('feedbacks-body-full').innerHTML = state.feedbacks.map(f => `
+        <tr>
+          <td>${formatDate(f.date)}</td>
+          <td>${f.user}</td>
+          <td><code>${f.orderId}</code></td>
+          <td>${Math.round(f.durationSec || 0)} sec</td>
+          <td>${f.errors || 0}</td>
+          <td>${f.resolved || 0}</td>
+          <td>${f.badge || '—'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="7" class="empty">Aucun feedback</td></tr>';
     }
 
     function renderQR() {
@@ -668,6 +691,7 @@
       <button class="tab-btn" data-tab="orders">Commandes</button>
       <button class="tab-btn" data-tab="articles">Stock / Articles</button>
       <button class="tab-btn" data-tab="scanner">Scanner</button>
+      <button class="tab-btn" data-tab="history">Historique</button>
       <button class="tab-btn" data-tab="qr">QR Code</button>
     </div>
 
@@ -789,6 +813,28 @@
               <div id="scan-feedback" class="sub">Le résumé final apparaîtra ici après validation.</div>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="tab-history" class="tab-panel">
+      <div class="card">
+        <h2>Historique des mouvements de stock</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>SKU</th><th>Article</th><th>Type</th><th>Qté</th><th>Par</th><th>Raison</th></tr></thead>
+            <tbody id="moves-body-full"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Historique des feedbacks préparateurs</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Préparateur</th><th>Commande</th><th>Temps</th><th>Erreurs</th><th>Résolus</th><th>Badge</th></tr></thead>
+            <tbody id="feedbacks-body-full"></tbody>
+          </table>
         </div>
       </div>
     </section>
