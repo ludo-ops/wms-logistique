@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WMS Logistique - Gestion</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import {
@@ -245,7 +247,8 @@
     function renderArticles() {
       const q = $('article-search').value.toLowerCase().trim();
       const tbody = $('articles-body');
-      const rows = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku)).map(a => `
+      const filtered = state.articles.filter(a => !q || a.sku.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.location || '').toLowerCase().includes(q)).sort((a,b) => a.sku.localeCompare(b.sku));
+      const rows = filtered.map(a => `
         <tr>
           <td><code>${a.sku}</code></td>
           <td>${a.name}</td>
@@ -254,14 +257,33 @@
           <td>${a.category || '—'}</td>
           <td>${a.threshold ?? 0}</td>
           <td>${money.format(a.price || 0)}</td>
+          <td>
+            <div class="art-codes">
+              <div class="art-qr-mini" id="qrmini-${a.sku}"></div>
+              <svg id="bc-${a.sku}"></svg>
+            </div>
+          </td>
           <td class="actions-cell">
             <button class="mini blue" onclick="window.editArticle('${a.sku}')">Modifier</button>
             <button class="mini orange" onclick="window.stockMove('${a.sku}')">Entrée/Sortie</button>
+            <button class="mini green" onclick="window.printArticle('${a.sku}')">🖨️ Imprimer</button>
             <button class="mini red" onclick="window.removeArticle('${a.sku}')">Supprimer</button>
           </td>
         </tr>
       `).join('');
-      tbody.innerHTML = rows || '<tr><td colspan="8" class="empty">Aucun article</td></tr>';
+      tbody.innerHTML = rows || '<tr><td colspan="9" class="empty">Aucun article</td></tr>';
+      setTimeout(() => {
+        filtered.forEach(a => {
+          const qrEl = document.getElementById('qrmini-' + a.sku);
+          if (qrEl && !qrEl.hasChildNodes()) {
+            try { new QRCode(qrEl, { text: a.sku, width: 44, height: 44, colorDark:'#1a1a1a', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e) {}
+          }
+          const bcEl = document.getElementById('bc-' + a.sku);
+          if (bcEl) {
+            try { JsBarcode(bcEl, a.sku, { format:'CODE128', width:1.2, height:28, displayValue:false, margin:2 }); } catch(e) {}
+          }
+        });
+      }, 50);
       $('order-item-sku').innerHTML = '<option value="">Choisir un article</option>' + state.articles.map(a => `<option value="${a.sku}">${a.sku} — ${a.name}</option>`).join('');
       window.fillScanOrders();
     }
@@ -332,7 +354,87 @@
       return state.orders.find(o => o.id === state.scannerOrderId);
     }
 
-    function renderScanner() {
+    let camStream = null;
+    let camInterval = null;
+
+    function showScanBlock(n) {
+      [1,2,3,4].forEach(i => {
+        const el = $('scan-block-' + i);
+        if (el) el.style.display = i === n ? 'block' : 'none';
+        const step = $('scanner-step-' + i);
+        if (step) {
+          step.classList.toggle('active', i === n);
+        }
+      });
+    }
+
+    async function startCamera() {
+      const video = $('cam-video');
+      const btnStart = $('btn-start-cam');
+      const btnStop = $('btn-stop-cam');
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = camStream;
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'block';
+        const canvas = $('cam-canvas');
+        const ctx = canvas.getContext('2d');
+        camInterval = setInterval(() => {
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+            if (code && code.data) {
+              const sku = normalizeSku(code.data);
+              if (sku) processCameraScan(sku);
+            }
+          }
+        }, 300);
+      } catch(e) {
+        toast('Caméra non accessible : ' + e.message, 'err');
+      }
+    }
+
+    function stopCamera() {
+      if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+      if (camInterval) { clearInterval(camInterval); camInterval = null; }
+      const btnStart = $('btn-start-cam');
+      const btnStop = $('btn-stop-cam');
+      if (btnStart) btnStart.style.display = 'block';
+      if (btnStop) btnStop.style.display = 'none';
+    }
+
+    let lastScannedSku = '';
+    let lastScannedTime = 0;
+
+    function processCameraScan(sku) {
+      const now = Date.now();
+      if (sku === lastScannedSku && now - lastScannedTime < 2000) return;
+      lastScannedSku = sku;
+      lastScannedTime = now;
+      const order = currentScannerOrder();
+      if (!order) return;
+      const item = order.items.find(i => i.sku === sku);
+      if (!item) { toast('Article ' + sku + ' non trouvé dans cette commande', 'err'); return; }
+      const current = state.scannerScanned[sku] || 0;
+      if (current >= item.qty) { toast('Quantité déjà complète pour ' + sku, 'err'); return; }
+      state.scannerScanned[sku] = current + 1;
+      state.scannerResolved += 1;
+      const flash = $('scan-flash');
+      if (flash) { flash.textContent = '✓ ' + sku; flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1500); }
+      renderScanner();
+      const complete = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
+      if (complete) {
+        stopCamera();
+        state.scannerStep = 3;
+        showScanBlock(3);
+        toast('Tous les articles scannés ! Passe à la vérification.');
+      }
+    }
+
+        function renderScanner() {
       const order = currentScannerOrder();
       $('scanner-step-1').classList.toggle('active', state.scannerStep === 1);
       $('scanner-step-2').classList.toggle('active', state.scannerStep === 2);
@@ -500,6 +602,8 @@
       const allOk = order.items.every(i => (state.scannerScanned[i.sku] || 0) === i.qty);
       if (!allOk) return toast('La double vérification a détecté un écart', 'err');
       state.scannerStep = 4;
+      showScanBlock(4);
+      stopCamera();
       const durationSec = (Date.now() - state.scannerStart) / 1000;
       const badge = state.scannerProblems === 0 ? 'Sans faute' : (state.scannerProblems <= 2 ? 'Bon contrôle' : 'À revoir');
       const updatedItems = order.items.map(i => ({ ...i, scanned: state.scannerScanned[i.sku] || 0 }));
@@ -568,7 +672,31 @@
       $('modal').classList.add('open');
     };
 
-    window.editArticle = function(sku) {
+    window.printArticle = function(sku) {
+      const a = state.articles.find(x => x.sku === sku);
+      if (!a) return;
+      const zone = $('print-zone');
+      zone.innerHTML = '';
+      const card = document.createElement('div');
+      card.className = 'print-card';
+      card.innerHTML = `
+        <h3>${a.name}</h3>
+        <p><strong>${a.sku}</strong></p>
+        <p>${a.location || ''}</p>
+        <div id="print-qr-${sku}" style="margin:8px auto;display:inline-block"></div>
+        <br>
+        <svg id="print-bc-${sku}" style="max-width:180px"></svg>
+        <p style="margin-top:6px;font-size:10px">${a.category || ''}</p>
+      `;
+      zone.appendChild(card);
+      setTimeout(() => {
+        try { new QRCode(document.getElementById('print-qr-' + sku), { text: sku, width: 120, height: 120, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e) {}
+        try { JsBarcode(document.getElementById('print-bc-' + sku), sku, { format:'CODE128', width:2, height:60, displayValue:true, fontSize:14, margin:4 }); } catch(e) {}
+        setTimeout(() => window.print(), 300);
+      }, 100);
+    };
+
+        window.editArticle = function(sku) {
       const a = state.articles.find(x => x.sku === sku);
       if (!a) return;
       $('art-sku').value = a.sku;
@@ -634,6 +762,20 @@
       $('order-search').addEventListener('input', renderOrders);
       $('order-filter').addEventListener('change', renderOrders);
       $('start-scan').addEventListener('click', window.startScanner);
+      document.addEventListener('click', e => {
+        if (e.target.id === 'btn-start-cam') startCamera();
+        if (e.target.id === 'btn-stop-cam') stopCamera();
+        if (e.target.id === 'btn-new-scan') {
+          stopCamera();
+          state.scannerOrderId = '';
+          state.scannerUser = '';
+          state.scannerScanned = {};
+          state.scannerStep = 1;
+          showScanBlock(1);
+          $('scan-user').value = '';
+          $('scan-order').value = '';
+        }
+      });
       $('back-picking').addEventListener('click', window.backToPicking);
       $('validate-double').addEventListener('click', window.validateDoubleCheck);
       $('close-modal').addEventListener('click', () => $('modal').classList.remove('open'));
@@ -692,6 +834,23 @@
     .toast{position:fixed;right:18px;bottom:18px;background:#111827;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s;z-index:100}.toast.show{opacity:1;transform:translateY(0)}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:90}.modal.open{display:flex}.modal-box{background:#fff;border-radius:20px;padding:22px;width:min(780px,100%);max-height:85vh;overflow:auto}.modal-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.close-btn{border:none;background:#eef2f7;width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer}
     #qrcode{display:inline-block;padding:16px;background:#fff;border-radius:18px;border:2px solid #eef2f7} code{font-size:12px}
+    .art-codes{display:flex;gap:8px;align-items:center}
+    .art-codes svg{width:80px;height:40px}
+    .art-qr-mini{width:44px;height:44px;display:inline-block}
+    .art-qr-mini canvas,.art-qr-mini img{width:44px!important;height:44px!important}
+    @media print{
+      body > *:not(#print-zone){display:none!important}
+      #print-zone{display:flex!important;flex-wrap:wrap;gap:16px;padding:10px}
+      .print-card{border:1px solid #ccc;border-radius:8px;padding:12px;width:200px;text-align:center;page-break-inside:avoid}
+      .print-card h3{font-size:13px;margin-bottom:6px;word-break:break-word}
+      .print-card p{font-size:11px;color:#555;margin-bottom:4px}
+    }
+    #print-zone{display:none}
+    .cam-wrap{position:relative;width:100%;max-width:400px;margin:0 auto}
+    .cam-wrap video{width:100%;border-radius:14px;border:2px solid var(--blue)}
+    .cam-wrap canvas{display:none}
+    .scan-result-flash{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#2e7d32;color:#fff;padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;opacity:0;transition:.3s}
+    .scan-result-flash.show{opacity:1}
     @media (max-width: 1000px){.grid-2,.grid-3,.detail-grid{grid-template-columns:1fr}} @media (max-width:700px){header h1{font-size:17px}.tab-btn{flex:1 1 calc(50% - 10px)}table{min-width:860px}}
   </style>
 </head>
@@ -793,7 +952,7 @@
         <div class="row" style="margin-bottom:12px"><div class="field"><label>Recherche</label><input id="article-search" placeholder="SKU, nom, emplacement" /></div></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>SKU</th><th>Nom</th><th>Qté</th><th>Emplacement</th><th>Catégorie</th><th>Seuil</th><th>Prix</th><th>Actions</th></tr></thead>
+            <thead><tr><th>SKU</th><th>Nom</th><th>Qté</th><th>Emplacement</th><th>Catégorie</th><th>Seuil</th><th>Prix</th><th>QR / Code-barre</th><th>Actions</th></tr></thead>
             <tbody id="articles-body"></tbody>
           </table>
         </div>
@@ -809,27 +968,62 @@
           <div class="step" id="scanner-step-3">3. Double vérification</div>
           <div class="step" id="scanner-step-4">4. Confirmation</div>
         </div>
-        <div class="grid-3">
-          <div>
-            <div class="row">
-              <div class="field"><label>Nom et prénom</label><input id="scan-user" placeholder="Ex : Luca Martin" /></div>
-              <div class="field"><label>Commande</label><select id="scan-order"></select></div>
-            </div>
-            <div style="margin-top:14px"><button class="btn blue" id="start-scan">Commencer</button></div>
-            <div id="scan-current" style="margin-top:18px"></div>
+
+        <!-- ÉTAPE 1 : Identification -->
+        <div id="scan-block-1">
+          <div class="row">
+            <div class="field"><label>Nom et prénom</label><input id="scan-user" placeholder="Ex : Luca Martin" /></div>
+            <div class="field"><label>Commande à préparer</label><select id="scan-order"></select></div>
           </div>
-          <div>
-            <div class="card" style="margin-bottom:12px">
-              <h2>Double vérification</h2>
-              <div id="double-check-list"></div>
-              <div class="row" style="margin-top:12px"><button class="btn gray" id="back-picking">Revenir corriger</button><button class="btn green" id="validate-double">Valider la commande</button></div>
+          <div style="margin-top:14px"><button class="btn blue" id="start-scan">Commencer la préparation</button></div>
+        </div>
+
+        <!-- ÉTAPE 2 : Picking -->
+        <div id="scan-block-2" style="display:none">
+          <div class="grid-3">
+            <div>
+              <div id="scan-current"></div>
             </div>
-            <div class="card">
-              <h2>Feedback</h2>
-              <div id="scan-feedback" class="sub">Le résumé final apparaîtra ici après validation.</div>
+            <div>
+              <div class="card" style="margin-bottom:12px">
+                <h2>📷 Scan caméra</h2>
+                <p class="sub" style="margin-bottom:10px">Pointe la caméra sur le QR code ou code-barre de l'article.</p>
+                <div class="cam-wrap">
+                  <video id="cam-video" autoplay playsinline muted></video>
+                  <canvas id="cam-canvas"></canvas>
+                  <div class="scan-result-flash" id="scan-flash">✓ Scanné !</div>
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <button class="btn blue" id="btn-start-cam">Activer la caméra</button>
+                  <button class="btn gray" id="btn-stop-cam" style="display:none">Arrêter</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        <!-- ÉTAPE 3 : Double vérification -->
+        <div id="scan-block-3" style="display:none">
+          <div class="card">
+            <h2>Double vérification</h2>
+            <p class="sub">Vérifie chaque article avant de valider définitivement.</p>
+            <div id="double-check-list"></div>
+            <div class="row" style="margin-top:14px">
+              <button class="btn gray" id="back-picking">← Revenir corriger</button>
+              <button class="btn green" id="validate-double">✅ Valider la commande</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ÉTAPE 4 : Feedback -->
+        <div id="scan-block-4" style="display:none">
+          <div class="card">
+            <h2>Résultat</h2>
+            <div id="scan-feedback" class="sub">Le résumé apparaîtra ici après validation.</div>
+            <button class="btn blue" style="margin-top:14px" id="btn-new-scan">Nouvelle préparation</button>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -864,6 +1058,8 @@
       </div>
     </section>
   </div>
+
+  <div id="print-zone"></div>
 
   <div id="modal" class="modal">
     <div class="modal-box">
