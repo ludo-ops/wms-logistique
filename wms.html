@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WMS – Interface Formateur</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--blue:#1a73e8;--red:#e53935;--green:#43a047;--orange:#fb8c00;--bg:#f0f4f8;--card:#fff;--txt:#202124;--border:#dadce0}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -104,7 +103,6 @@ tr:hover td{background:#f8f9ff}
   <button class="tab-btn" onclick="showTab('tab-retours')">↩️ Retours</button>
   <button class="tab-btn" onclick="showTab('tab-reception')">📦 Réception</button>
   <button class="tab-btn" onclick="showTab('tab-articles')">🗃️ Articles</button>
-  <button class="tab-btn" onclick="showTab('tab-qr')">📱 QR Code</button>
 </nav>
 
 <!-- ============================================================ DASHBOARD -->
@@ -216,19 +214,6 @@ tr:hover td{background:#f8f9ff}
 </div>
 
 <!-- ============================================================ QR CODE -->
-<div id="tab-qr" class="tab-content">
-  <div class="card qr-section">
-    <h2>📱 QR Code – Interface élève</h2>
-    <p style="color:#666;margin-bottom:12px">Scannez ce QR code avec le téléphone pour accéder à l'interface de demande.</p>
-    <div id="qrcode-container"><div id="qrcode-wms"></div></div>
-    <div style="margin-top:12px;font-size:13px;color:#888" id="qr-url-display"></div>
-    <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <input type="text" id="custom-url" placeholder="URL personnalisée (ex: Pinggy)" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:300px">
-      <button class="btn btn-blue" onclick="generateQR()">🔄 Générer QR</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- ========== HISTORIQUE ========== -->
 <div id="tab-historique" class="tab-content">
@@ -257,42 +242,78 @@ tr:hover td{background:#f8f9ff}
 
 <!-- ========== SCAN FORMATEUR ========== -->
 <div id="tab-scan" class="tab-content">
-  <div class="card">
-    <h2>📷 Scanner un article</h2>
-    <p style="color:#666;font-size:13px;margin-bottom:14px">Scannez le QR/code-barre d'un article pour consulter ou modifier son stock instantanément.</p>
-    <div class="scan-live-box" id="scan-box">
-      <video id="scan-video" autoplay playsinline muted></video>
-      <canvas id="scan-canvas"></canvas>
+  <!-- ETAPE 1 : Choix commande -->
+  <div class="card" id="scan-step1">
+    <h2>📷 Scanner une commande</h2>
+    <p style="color:#666;font-size:13px;margin-bottom:14px">Choisissez la commande à préparer, puis lancez le scan.</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Votre prénom / nom</label>
+        <input type="text" id="scan-user-name" placeholder="Ex: Jean Dupont">
+      </div>
+      <div class="form-group">
+        <label>Commande à préparer</label>
+        <select id="scan-order-select" onchange="previewScanOrder()">
+          <option value="">-- Sélectionner --</option>
+        </select>
+      </div>
     </div>
-    <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <button class="btn btn-blue" id="btn-start-scan" onclick="startFormScan()">▶️ Démarrer la caméra</button>
-      <button class="btn btn-gray" id="btn-stop-scan" onclick="stopFormScan()" style="display:none">⏹️ Arrêter</button>
+    <div id="scan-order-preview" style="display:none;margin-top:8px;padding:10px;background:#e8f0fe;border-radius:8px;font-size:13px"></div>
+    <div style="margin-top:12px">
+      <button class="btn btn-blue" onclick="startScanSession()">▶ Commencer le scan</button>
     </div>
-    <div id="scan-result-box" style="margin-top:16px;display:none">
-      <div style="background:#e8f5e9;border-radius:8px;padding:14px">
-        <div style="font-weight:700;font-size:15px;color:var(--blue)" id="scan-result-name"></div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px">
-          <span>SKU : <strong id="scan-result-sku"></strong></span>
-          <span>Qté : <strong id="scan-result-qty"></strong></span>
-          <span>Emplacement : <strong id="scan-result-loc"></strong></span>
-          <span>Catégorie : <strong id="scan-result-cat"></strong></span>
+  </div>
+
+  <!-- ETAPE 2 : Session scan -->
+  <div id="scan-step2" style="display:none">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px" id="scan-session-title">Commande</div>
+          <div style="font-size:12px;color:#666" id="scan-session-sub"></div>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <label style="font-size:13px;font-weight:600">Ajuster la quantité :</label>
-          <input type="number" id="scan-adjust-qty" style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px">
-          <button class="btn btn-green btn-sm" onclick="applyScanAdjust()">✅ Mettre à jour</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="scan-indicator" style="width:18px;height:18px;border-radius:50%;background:#e53935;box-shadow:0 0 8px rgba(229,57,53,.6);transition:.3s"></div>
+          <span id="scan-indicator-lbl" style="font-size:12px;color:#666">En attente</span>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span>Progression</span><span id="scan-progress-txt">0 / 0</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="scan-progress-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="scan-live-box">
+        <video id="scan-video" autoplay playsinline muted></video>
+        <canvas id="scan-canvas"></canvas>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-blue" id="btn-start-scan" onclick="startFormScan()">▶ Caméra</button>
+        <button class="btn btn-gray" id="btn-stop-scan" onclick="stopFormScan()" style="display:none">⏹ Arrêter</button>
+      </div>
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        <p style="font-size:12px;color:#666;margin-bottom:6px">Ou entrez le SKU manuellement :</p>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="manual-scan-sku" placeholder="Ex: LOG-001"
+            style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px"
+            onkeydown="if(event.key==='Enter') manualScanItem()">
+          <button class="btn btn-blue" onclick="manualScanItem()">Valider</button>
         </div>
       </div>
     </div>
-    <!-- Saisie manuelle fallback -->
-    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-      <p style="font-size:13px;color:#666;margin-bottom:8px">Ou entrez un SKU manuellement :</p>
-      <div style="display:flex;gap:8px">
-        <input type="text" id="manual-scan-sku" placeholder="Ex: LOG-001"
-          style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px"
-          onkeydown="if(event.key==='Enter') manualScanLookup()">
-        <button class="btn btn-blue" onclick="manualScanLookup()">🔍 Chercher</button>
-      </div>
+    <div class="card">
+      <h2>Articles de la commande</h2>
+      <div id="scan-items-list"></div>
+    </div>
+    <div class="card" id="scan-validate-box" style="display:none;background:#e8f5e9;text-align:center">
+      <div style="font-size:32px">✅</div>
+      <div style="font-weight:700;font-size:16px;color:var(--green);margin:8px 0">Tous les articles sont scannés !</div>
+      <button class="btn btn-green" onclick="confirmValidateOrder()">Valider la commande</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn btn-gray btn-sm" onclick="cancelScanSession()">✖ Annuler</button>
     </div>
   </div>
 </div>
@@ -309,6 +330,10 @@ tr:hover td{background:#f8f9ff}
         <option value="">Tous statuts</option>
         <option value="pending">En attente</option>
         <option value="completed">Traité</option>
+        <option value="quarantine">Quarantaine</option>
+        <option value="returned">Retourné fournisseur</option>
+        <option value="restocked">Remis en stock</option>
+        <option value="dispute">Litige signalé</option>
       </select>
     </div>
     <div style="overflow-x:auto">
@@ -346,16 +371,19 @@ tr:hover td{background:#f8f9ff}
         <option value="conforme">Conforme</option>
         <option value="nonconforme">Non conforme</option>
         <option value="pending">En attente</option>
+        <option value="refused">Refusée</option>
+        <option value="reserved">Avec réserve</option>
       </select>
     </div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Référence</th><th>SKU</th><th>Qté attendue</th><th>Qté reçue</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Référence</th><th>SKU</th><th>Qté att.</th><th>Qté reçue</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody id="reception-tbody"></tbody>
       </table>
     </div>
   </div>
 </div>
+
 
 <!-- ============================================================ MODAL -->
 <div id="modal-overlay">
@@ -397,7 +425,7 @@ function loadFromStorage() {
 // ============================================================
 // TABS
 // ============================================================
-const TAB_IDS = ['tab-dashboard','tab-orders','tab-historique','tab-scan','tab-retours','tab-reception','tab-articles','tab-qr'];
+const TAB_IDS = ['tab-dashboard','tab-orders','tab-historique','tab-scan','tab-retours','tab-reception','tab-articles'];
 function showTab(id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -405,11 +433,11 @@ function showTab(id) {
   const idx = TAB_IDS.indexOf(id);
   const btns = document.querySelectorAll('.tab-btn');
   if(btns[idx]) btns[idx].classList.add('active');
-  if(id==='tab-qr')        setTimeout(generateQR, 100);
   if(id==='tab-historique') renderHistorique();
   if(id==='tab-retours')    renderRetours();
   if(id==='tab-reception')  renderReceptions();
   if(id==='tab-scan')       initScanTab();
+  if(id==='tab-scan')       setScanIndicator('idle');
 }
 
 // ============================================================
@@ -456,23 +484,6 @@ function updateStats() {
   document.getElementById('st-articles').textContent= articles.length;
 }
 
-// ============================================================
-// QR CODE
-// ============================================================
-function generateQR() {
-  const custom = (document.getElementById('custom-url')||{}).value||'';
-  const url = custom.trim() || (window.location.origin + '/demande.html');
-  document.getElementById('qr-url-display').textContent = url;
-  const container = document.getElementById('qrcode-wms');
-  container.innerHTML = '';
-  try {
-    new QRCode(container, {
-      text: url, width: 240, height: 240,
-      colorDark: '#1a73e8', colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.H
-    });
-  } catch(e) { container.innerHTML = '<p style="color:red">Erreur génération QR</p>'; }
-}
 
 // ============================================================
 // ARTICLES
@@ -819,12 +830,11 @@ function defaultOrders() {
 let _scanMsgTimer = null;
 function scanFeedback(type, label) {
   const overlay = document.getElementById('scan-feedback-overlay');
-  const bar     = document.getElementById('scan-msg-bar');
+  const bar = document.getElementById('scan-msg-bar');
   if(!overlay||!bar) return;
-  overlay.className=''; bar.className='';
-  void overlay.offsetWidth; // reflow pour relancer animation
+  overlay.className=''; bar.className=''; void overlay.offsetWidth;
   overlay.className=type; bar.className=type;
-  bar.textContent = type==='success' ? '✅ Article scanné : '+(label||'') : '❌ '+(label||'Article non reconnu');
+  bar.textContent = type==='success' ? '✅ Article scanne : '+(label||'') : '❌ '+(label||'Article non reconnu');
   clearTimeout(_scanMsgTimer);
   _scanMsgTimer = setTimeout(()=>{ overlay.className=''; bar.className=''; }, type==='success'?2000:2500);
   try {
@@ -850,6 +860,235 @@ function scanFeedback(type, label) {
 }
 
 // ============================================================
+// SCAN SESSION — choix commande + suivi temps reel
+// ============================================================
+let _scanSession = null; // { orderId, userName }
+let _scanStream = null, _scanAnimFrame = null;
+
+function initScanTab() {
+  // Peupler le select des commandes disponibles
+  const sel = document.getElementById('scan-order-select');
+  if(!sel) return;
+  const available = orders.filter(o=>o.status==='pending'||o.status==='inprogress');
+  sel.innerHTML = '<option value="">-- Selectionner --</option>' +
+    available.map(o=>`<option value="${o.id}">${o.id} - ${o.client}${o.urgent?' [URGENT]':''}</option>`).join('');
+}
+
+function previewScanOrder() {
+  const id = document.getElementById('scan-order-select').value;
+  const box = document.getElementById('scan-order-preview');
+  if(!id){ box.style.display='none'; return; }
+  const o = orders.find(x=>x.id===id);
+  if(!o){ box.style.display='none'; return; }
+  const total = o.items.reduce((s,it)=>s+it.qty,0);
+  const scanned = o.items.reduce((s,it)=>s+(it.scanned||0),0);
+  box.style.display='block';
+  box.innerHTML = `<strong>${o.id}</strong> - ${o.client} &nbsp;|&nbsp; Tracking : <code>${o.tracking}</code><br>
+    ${o.items.length} articles, ${total} pieces &nbsp;|&nbsp; Deja scannes : ${scanned}/${total}
+    ${o.urgent?'&nbsp;<span class="badge badge-urgent">URGENT</span>':''}`;
+}
+
+function startScanSession() {
+  const name = (document.getElementById('scan-user-name').value||'').trim();
+  const id = document.getElementById('scan-order-select').value;
+  if(!name) return showToast('❌ Entrez votre prenom');
+  if(!id)   return showToast('❌ Selectionnez une commande');
+  const o = orders.find(x=>x.id===id);
+  if(!o) return showToast('❌ Commande introuvable');
+  _scanSession = { orderId: id, userName: name };
+  // Marquer en cours
+  if(o.status==='pending'){ o.status='inprogress'; o.assignedTo=name; persistData(); }
+  document.getElementById('scan-step1').style.display='none';
+  document.getElementById('scan-step2').style.display='block';
+  document.getElementById('scan-session-title').textContent = o.id+' - '+o.client;
+  document.getElementById('scan-session-sub').textContent = 'Preparateur : '+name+' | Tracking : '+o.tracking;
+  renderScanItems();
+  updateScanProgress();
+}
+
+function cancelScanSession() {
+  stopFormScan();
+  _scanSession = null;
+  document.getElementById('scan-step1').style.display='block';
+  document.getElementById('scan-step2').style.display='none';
+  document.getElementById('scan-validate-box').style.display='none';
+  document.getElementById('manual-scan-sku').value='';
+  setScanIndicator('idle');
+}
+
+function setScanIndicator(state) {
+  const dot = document.getElementById('scan-indicator');
+  const lbl = document.getElementById('scan-indicator-lbl');
+  if(!dot||!lbl) return;
+  const cfg = {
+    idle:    { bg:'#e53935', shadow:'rgba(229,57,53,.6)',  txt:'En attente' },
+    success: { bg:'#43a047', shadow:'rgba(67,160,71,.6)',  txt:'Scan OK !' },
+    error:   { bg:'#fb8c00', shadow:'rgba(251,140,0,.6)',  txt:'Non reconnu' },
+    active:  { bg:'#1a73e8', shadow:'rgba(26,115,232,.6)', txt:'Camera active' },
+  };
+  const c = cfg[state]||cfg.idle;
+  dot.style.background = c.bg;
+  dot.style.boxShadow = '0 0 8px '+c.shadow;
+  lbl.textContent = c.txt;
+  if(state==='success'||state==='error') setTimeout(()=>setScanIndicator('active'), 1500);
+}
+
+function updateScanProgress() {
+  if(!_scanSession) return;
+  const o = orders.find(x=>x.id===_scanSession.orderId);
+  if(!o) return;
+  const total   = o.items.reduce((s,it)=>s+it.qty,0);
+  const scanned = o.items.reduce((s,it)=>s+(it.scanned||0),0);
+  const pct = total ? Math.round(scanned/total*100) : 0;
+  const txt  = document.getElementById('scan-progress-txt');
+  const fill = document.getElementById('scan-progress-fill');
+  if(txt)  txt.textContent  = scanned+' / '+total+' articles ('+pct+'%)';
+  if(fill) fill.style.width = pct+'%';
+  const allDone = scanned >= total && total > 0;
+  const valBox = document.getElementById('scan-validate-box');
+  if(valBox) valBox.style.display = allDone ? 'block' : 'none';
+}
+
+function renderScanItems() {
+  if(!_scanSession) return;
+  const o = orders.find(x=>x.id===_scanSession.orderId);
+  if(!o) return;
+  const container = document.getElementById('scan-items-list');
+  if(!container) return;
+  container.innerHTML = o.items.map((it,i)=>{
+    const sc = it.scanned||0;
+    const done = sc >= it.qty;
+    const pct  = it.qty ? Math.round(sc/it.qty*100) : 0;
+    return `<div style="padding:10px 0;border-bottom:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <span style="font-weight:600;font-size:13px">${it.name}</span>
+          <span style="font-size:11px;color:#888;font-family:monospace;margin-left:6px">${it.sku}</span><br>
+          <span style="font-size:12px;color:#555">${it.location||''}</span>
+        </div>
+        <div style="text-align:right;min-width:80px">
+          <span style="font-size:20px">${done?'✅':''}</span>
+          <div style="font-weight:700;font-size:13px;color:${done?'var(--green)':'var(--blue)'}">${sc}/${it.qty}</div>
+        </div>
+      </div>
+      <div class="progress-bar" style="margin-top:6px">
+        <div class="progress-fill ${done?'done':''}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function processScan(rawSku) {
+  if(!_scanSession) return;
+  const sku = rawSku.trim().toUpperCase();
+  if(!sku) return;
+  const o = orders.find(x=>x.id===_scanSession.orderId);
+  if(!o) return showToast('❌ Commande introuvable');
+  const item = o.items.find(it=>it.sku===sku);
+  if(!item) {
+    setScanIndicator('error');
+    scanFeedback('error', 'SKU non dans cette commande : '+sku);
+    return;
+  }
+  if((item.scanned||0) >= item.qty) {
+    setScanIndicator('error');
+    scanFeedback('error', item.name+' deja complet');
+    return;
+  }
+  item.scanned = (item.scanned||0) + 1;
+  persistData();
+  setScanIndicator('success');
+  scanFeedback('success', item.name+' ('+item.scanned+'/'+item.qty+')');
+  renderScanItems();
+  updateScanProgress();
+  renderOrders(); updateStats();
+}
+
+function manualScanItem() {
+  const input = document.getElementById('manual-scan-sku');
+  const val = (input?.value||'').trim().toUpperCase();
+  if(!val) return showToast('❌ Entrez un SKU');
+  processScan(val);
+  if(input) input.value='';
+}
+
+function confirmValidateOrder() {
+  if(!_scanSession) return;
+  const o = orders.find(x=>x.id===_scanSession.orderId);
+  if(!o) return;
+  const total   = o.items.reduce((s,it)=>s+it.qty,0);
+  const scanned = o.items.reduce((s,it)=>s+(it.scanned||0),0);
+  if(scanned < total) return showToast('❌ Tous les articles ne sont pas scannes');
+  const rows = o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #eee"><span><strong>${it.sku}</strong> ${it.name}</span><span>${it.qty} pcs</span></div>`).join('');
+  openModal('Confirmer la validation',
+    `<p style="margin-bottom:10px">Verifiez le recapitulatif avant de valider :</p>${rows}
+     <p style="margin-top:12px;padding:10px;background:#fff8e1;border-radius:6px;font-size:13px">Cette action est irreversible. La commande passera au statut "expedie".</p>`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'✅ Valider',cls:'btn-green',fn:()=>{
+      closeModal();
+      o.status='completed'; o.assignedTo=_scanSession.userName;
+      persistData(); renderOrders(); renderUrgentList(); updateStats();
+      showToast('✅ Commande '+o.id+' validee !');
+      cancelScanSession();
+    }}]);
+}
+
+// ============================================================
+// SCAN CAMERA
+// ============================================================
+async function startFormScan() {
+  if(!_scanSession) return showToast('❌ Selectionnez une commande dabord');
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const video = document.getElementById('scan-video');
+    video.srcObject = _scanStream;
+    document.getElementById('btn-start-scan').style.display='none';
+    document.getElementById('btn-stop-scan').style.display='';
+    setScanIndicator('active');
+    scanFormLoop();
+  } catch(e) { showToast('❌ Camera non disponible : '+e.message); }
+}
+
+function stopFormScan() {
+  if(_scanStream) _scanStream.getTracks().forEach(t=>t.stop());
+  _scanStream=null;
+  cancelAnimationFrame(_scanAnimFrame);
+  const bStart = document.getElementById('btn-start-scan');
+  const bStop  = document.getElementById('btn-stop-scan');
+  if(bStart) bStart.style.display='';
+  if(bStop)  bStop.style.display='none';
+  setScanIndicator('idle');
+}
+
+let _lastScanned='', _lastScannedTime=0;
+function scanFormLoop() {
+  const video  = document.getElementById('scan-video');
+  const canvas = document.getElementById('scan-canvas');
+  if(!canvas||!video||!_scanStream) return;
+  const ctx2 = canvas.getContext('2d');
+  canvas.width=video.videoWidth||400; canvas.height=video.videoHeight||300;
+  ctx2.drawImage(video,0,0,canvas.width,canvas.height);
+  if('BarcodeDetector' in window){
+    const bd = new BarcodeDetector({formats:['qr_code','code_128','ean_13','code_39']});
+    bd.detect(canvas).then(codes=>{
+      if(codes.length){
+        const raw = codes[0].rawValue;
+        const now = Date.now();
+        if(raw!==_lastScanned || now-_lastScannedTime>2000){
+          _lastScanned=raw; _lastScannedTime=now;
+          processScan(raw);
+        }
+      }
+      _scanAnimFrame=requestAnimationFrame(scanFormLoop);
+    }).catch(()=>{ _scanAnimFrame=requestAnimationFrame(scanFormLoop); });
+  } else {
+    ctx2.fillStyle='rgba(0,0,0,.5)'; ctx2.fillRect(0,0,canvas.width,28);
+    ctx2.fillStyle='#fff'; ctx2.font='12px sans-serif';
+    ctx2.fillText('BarcodeDetector non disponible - utilisez la saisie manuelle',6,18);
+    _scanAnimFrame=requestAnimationFrame(scanFormLoop);
+  }
+}
+
+// ============================================================
 // HISTORIQUE
 // ============================================================
 function renderHistorique() {
@@ -862,8 +1101,8 @@ function renderHistorique() {
     (!filter||o.status===filter)
   ).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!all.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Aucune commande</td></tr>'; return; }
-  const statusLabel={pending:'En attente',inprogress:'En cours',completed:'Terminée'};
-  const statusBadge={pending:'badge-pending',inprogress:'badge-inprogress',completed:'badge-completed'};
+  const sLabel={pending:'En attente',inprogress:'En cours',completed:'Terminee'};
+  const sBadge={pending:'badge-pending',inprogress:'badge-inprogress',completed:'badge-completed'};
   tbody.innerHTML = all.map(o=>{
     const total=o.items.reduce((s,it)=>s+it.qty,0);
     const scanned=o.items.reduce((s,it)=>s+(it.scanned||0),0);
@@ -871,8 +1110,8 @@ function renderHistorique() {
     return `<tr>
       <td><code>${o.id}</code></td><td>${o.client}</td>
       <td style="font-family:monospace;font-size:12px">${o.tracking}</td>
-      <td><span class="badge ${statusBadge[o.status]||''}">${statusLabel[o.status]||o.status}</span></td>
-      <td>${o.isReal?'<span class="badge badge-urgent">Réelle</span>':'<span class="badge" style="background:#e8f5e9;color:var(--green)">Démo</span>'}</td>
+      <td><span class="badge ${sBadge[o.status]||''}">${sLabel[o.status]||o.status}</span></td>
+      <td>${o.isReal?'<span class="badge badge-urgent">Reelle</span>':'<span class="badge" style="background:#e8f5e9;color:var(--green)">Demo</span>'}</td>
       <td style="text-align:center">${o.items.length}</td>
       <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div style="font-size:11px">${scanned}/${total}</div></td>
       <td style="font-size:12px">${o.date?new Date(o.date).toLocaleDateString('fr-BE'):'-'}</td>
@@ -886,102 +1125,12 @@ function exportHistoriqueCSV() {
   const sep = '\n';
   const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join(sep);
   const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='historique_wms.csv'; a.click();
 }
 
 // ============================================================
-// SCAN FORMATEUR (caméra)
-// ============================================================
-let _scanStream=null, _scanAnimFrame=null, _scannedSku=null;
-
-function initScanTab(){ /* prêt mais caméra pas démarrée automatiquement */ }
-
-async function startFormScan() {
-  try {
-    _scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const video = document.getElementById('scan-video');
-    video.srcObject = _scanStream;
-    document.getElementById('btn-start-scan').style.display='none';
-    document.getElementById('btn-stop-scan').style.display='';
-    scanFormLoop();
-  } catch(e) { showToast('❌ Caméra non disponible : '+e.message); }
-}
-
-function stopFormScan() {
-  if(_scanStream) _scanStream.getTracks().forEach(t=>t.stop());
-  _scanStream=null;
-  cancelAnimationFrame(_scanAnimFrame);
-  document.getElementById('btn-start-scan').style.display='';
-  document.getElementById('btn-stop-scan').style.display='none';
-}
-
-function scanFormLoop() {
-  const video  = document.getElementById('scan-video');
-  const canvas = document.getElementById('scan-canvas');
-  if(!canvas||!video||!_scanStream) return;
-  const ctx2 = canvas.getContext('2d');
-  canvas.width=video.videoWidth||400; canvas.height=video.videoHeight||300;
-  ctx2.drawImage(video,0,0,canvas.width,canvas.height);
-  // Utiliser BarcodeDetector si dispo (Chrome/Android)
-  if('BarcodeDetector' in window){
-    const bd = new BarcodeDetector({formats:['qr_code','code_128','ean_13','code_39']});
-    bd.detect(canvas).then(codes=>{
-      if(codes.length){
-        const raw = codes[0].rawValue;
-        stopFormScan();
-        resolveScannedSku(raw);
-      } else { _scanAnimFrame=requestAnimationFrame(scanFormLoop); }
-    }).catch(()=>{ _scanAnimFrame=requestAnimationFrame(scanFormLoop); });
-  } else {
-    // Fallback : BarcodeDetector non dispo -- afficher message
-    ctx2.fillStyle='rgba(0,0,0,0.5)'; ctx2.fillRect(0,0,canvas.width,30);
-    ctx2.fillStyle='#fff'; ctx2.font='13px sans-serif';
-    ctx2.fillText('BarcodeDetector non dispo -- utilisez la saisie manuelle',8,20);
-    _scanAnimFrame=requestAnimationFrame(scanFormLoop);
-  }
-}
-
-function resolveScannedSku(raw) {
-  const sku = raw.trim().toUpperCase();
-  const art = articles.find(a=>a.sku===sku||raw.includes(a.sku));
-  if(art){ showScanResult(art); scanFeedback('success', art.name); }
-  else { scanFeedback('error','SKU non trouvé : '+sku); showToast('❌ Article non reconnu : '+sku); }
-}
-
-function manualScanLookup() {
-  const val = (document.getElementById('manual-scan-sku')?.value||'').trim().toUpperCase();
-  if(!val) return showToast('❌ Entrez un SKU');
-  const art = articles.find(a=>a.sku===val);
-  if(art){ showScanResult(art); scanFeedback('success',art.name); }
-  else { scanFeedback('error','SKU non trouvé : '+val); }
-}
-
-function showScanResult(art) {
-  _scannedSku = art.sku;
-  document.getElementById('scan-result-name').textContent = art.name;
-  document.getElementById('scan-result-sku').textContent  = art.sku;
-  document.getElementById('scan-result-qty').textContent  = art.qty;
-  document.getElementById('scan-result-loc').textContent  = art.location||'-';
-  document.getElementById('scan-result-cat').textContent  = art.category||'-';
-  document.getElementById('scan-adjust-qty').value        = art.qty;
-  document.getElementById('scan-result-box').style.display='block';
-}
-
-function applyScanAdjust() {
-  if(!_scannedSku) return;
-  const newQty = parseInt(document.getElementById('scan-adjust-qty').value)||0;
-  const idx = articles.findIndex(a=>a.sku===_scannedSku);
-  if(idx<0) return showToast('❌ Article introuvable');
-  articles[idx].qty = newQty;
-  persistData(); renderArticles(); updateStats();
-  document.getElementById('scan-result-qty').textContent = newQty;
-  showToast('✅ Stock mis à jour : '+_scannedSku+' → '+newQty);
-  scanFeedback('success', articles[idx].name);
-}
-
-// ============================================================
-// RETOURS -- localStorage
+// RETOURS — localStorage + interactions cariste
 // ============================================================
 function loadRetours(){ try{return JSON.parse(localStorage.getItem('wms_retours')||'[]');}catch(e){return[];} }
 function saveRetours(d){ localStorage.setItem('wms_retours',JSON.stringify(d)); }
@@ -990,33 +1139,110 @@ function renderRetours() {
   const search=(document.getElementById('retour-search')?.value||'').toLowerCase();
   const filter=document.getElementById('retour-filter')?.value||'';
   const tbody=document.getElementById('retours-tbody'); if(!tbody)return;
-  const all=loadRetours().filter(r=>(!search||(r.ref+r.motif).toLowerCase().includes(search))&&(!filter||r.status===filter));
+  const all=loadRetours().filter(r=>
+    (!search||(r.ref+' '+r.motif).toLowerCase().includes(search))&&
+    (!filter||r.status===filter)
+  );
   if(!all.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Aucun retour</td></tr>';return;}
-  tbody.innerHTML=all.map((r,i)=>`<tr>
-    <td><code>${r.ref||'-'}</code></td>
-    <td>${(r.items||[]).map(it=>`<span class="badge" style="background:#e8f0fe;color:var(--blue)">${it}</span>`).join(' ')||'-'}</td>
-    <td>${r.motif||'-'}</td>
-    <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
-    <td><span class="badge badge-${r.status==='completed'?'traite':'en-attente'}">${r.status==='completed'?'✅ Traité':'⏳ En attente'}</span></td>
-    <td>
-      <button class="btn btn-green btn-sm" onclick="markRetourDone(${i})">✅</button>
-      <button class="btn btn-red btn-sm" onclick="deleteRetour(${i})">🗑️</button>
-    </td></tr>`).join('');
+  const statusMap={
+    pending:'⏳ En attente',completed:'✅ Traite',quarantine:'🔒 Quarantaine',
+    returned:'↩ Retourne fournisseur',restocked:'📦 Remis en stock',dispute:'⚠ Litige signale'
+  };
+  const badgeMap={
+    pending:'en-attente',completed:'traite',quarantine:'badge-urgent',
+    returned:'retour',restocked:'conforme',dispute:'badge-urgent'
+  };
+  tbody.innerHTML=all.map((r,i)=>{
+    const isNonConforme = r.categorie==='nonconforme'||r.nonConforme===true;
+    const actionsHTML = buildRetourActions(r,i,isNonConforme);
+    return `<tr>
+      <td><code>${r.ref||'-'}</code></td>
+      <td>${(r.items||[]).map(it=>`<span class="badge" style="background:#e8f0fe;color:var(--blue)">${it}</span>`).join(' ')||'-'}</td>
+      <td>${r.motif||'-'}</td>
+      <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
+      <td><span class="badge badge-${badgeMap[r.status]||'en-attente'}">${statusMap[r.status]||r.status}</span></td>
+      <td>${actionsHTML}</td>
+    </tr>`;
+  }).join('');
 }
+
+function buildRetourActions(r,i,isNonConforme) {
+  const done = ['completed','quarantine','returned','restocked','dispute'].includes(r.status);
+  if(done && r.status!=='dispute') return `<button class="btn btn-red btn-sm" onclick="deleteRetour(${i})">🗑</button>`;
+  if(r.status==='dispute') return `<span style="font-size:12px;color:var(--orange)">${r.disputeDesc||''}</span> <button class="btn btn-red btn-sm" onclick="deleteRetour(${i})">🗑</button>`;
+  if(isNonConforme || r.status==='pending') {
+    return `
+      <button class="btn btn-orange btn-sm" onclick="retourAction(${i},'quarantine')" title="Mettre en quarantaine">🔒 Quarantaine</button>
+      <button class="btn btn-blue btn-sm" onclick="retourAction(${i},'returned')" title="Retourner au fournisseur">↩ Fournisseur</button>
+      <button class="btn btn-green btn-sm" onclick="retourAction(${i},'restocked')" title="Remettre en stock">📦 En stock</button>
+      <button class="btn btn-red btn-sm" onclick="openDisputeForm(${i})" title="Signaler un litige">⚠ Litige</button>
+      <button class="btn btn-gray btn-sm" onclick="retourAction(${i},'completed')">✅</button>
+    `;
+  }
+  return `<button class="btn btn-green btn-sm" onclick="retourAction(${i},'completed')">✅ Confirmer</button>`;
+}
+
+function retourAction(i, newStatus) {
+  const data=loadRetours();
+  if(!data[i]) return;
+  data[i].status=newStatus;
+  data[i].actionDate=new Date().toISOString();
+  // Si remis en stock : incrementer la quantite dans articles
+  if(newStatus==='restocked'){
+    (data[i].items||[]).forEach(sku=>{
+      const art=articles.find(a=>a.sku===sku);
+      if(art){ art.qty+=1; }
+    });
+    persistData();
+    renderArticles(); updateStats();
+  }
+  saveRetours(data); renderRetours();
+  const msg={quarantine:'🔒 Article mis en quarantaine',returned:'↩ Retour fournisseur enregistre',restocked:'📦 Article remis en stock',completed:'✅ Retour traite'};
+  showToast(msg[newStatus]||'✅ Mis a jour');
+}
+
+function openDisputeForm(i) {
+  openModal('Signaler un litige',
+    `<div class="form-group" style="margin-bottom:10px">
+      <label>Categorie</label>
+      <select id="dispute-cat" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px">
+        <option value="casse">Casse</option>
+        <option value="ref">Erreur de reference</option>
+        <option value="qty">Quantite incorrecte</option>
+        <option value="autre">Autre</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="dispute-desc" rows="3" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px" placeholder="Decrivez le probleme..."></textarea>
+    </div>`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Signaler',cls:'btn-red',fn:()=>{
+      const cat=document.getElementById('dispute-cat')?.value||'';
+      const desc=(document.getElementById('dispute-desc')?.value||'').trim();
+      if(!desc) return showToast('❌ Description requise');
+      closeModal();
+      const data=loadRetours();
+      if(data[i]){ data[i].status='dispute'; data[i].disputeDesc='['+cat+'] '+desc; data[i].actionDate=new Date().toISOString(); }
+      saveRetours(data); renderRetours();
+      showToast('⚠ Litige signale');
+    }}]
+  );
+}
+
 function markRetourDone(i){const d=loadRetours();if(d[i]){d[i].status='completed';saveRetours(d);renderRetours();}}
 function deleteRetour(i){const d=loadRetours();d.splice(i,1);saveRetours(d);renderRetours();}
 function addRetourDemo(){
   const t=Date.now();
   saveRetours([...loadRetours(),
-    {ref:'RET-'+t,    items:['LOG-006','LOG-007'],motif:'Retour client - emballage abîmé',         date:new Date().toISOString(),status:'pending',categorie:'retour'},
-    {ref:'RET-'+(t+1),items:['MAT-001'],          motif:'Annulation partielle - quantité excédentaire',date:new Date().toISOString(),status:'pending',categorie:'retour'},
-    {ref:'RET-'+(t+2),items:['LOG-019','LOG-020'],motif:'Litige qualité - EPI non conformes',      date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+t,    items:['LOG-006','LOG-007'],motif:'Retour client – emballage abime', date:new Date().toISOString(),status:'pending',categorie:'nonconforme',nonConforme:true},
+    {ref:'RET-'+(t+1),items:['MAT-001'],          motif:'Annulation partielle – quantite excedentaire',date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+(t+2),items:['LOG-019','LOG-020'],motif:'Litige qualite – EPI non conformes',date:new Date().toISOString(),status:'pending',categorie:'nonconforme',nonConforme:true},
   ]);
   renderRetours();
 }
 
 // ============================================================
-// RÉCEPTIONS -- localStorage
+// RECEPTIONS — localStorage + interactions cariste
 // ============================================================
 function loadReceptions(){ try{return JSON.parse(localStorage.getItem('wms_receptions')||'[]');}catch(e){return[];} }
 function saveReceptions(d){ localStorage.setItem('wms_receptions',JSON.stringify(d)); }
@@ -1028,35 +1254,154 @@ function saveReception(){
   const sku=(document.getElementById('rec-sku')?.value||'').trim().toUpperCase();
   const qtyE=parseInt(document.getElementById('rec-qty-expected')?.value)||0;
   const qtyR=parseInt(document.getElementById('rec-qty-received')?.value)||0;
-  if(!ref||!sku) return showToast('❌ Référence et SKU requis');
+  if(!ref||!sku) return showToast('❌ Reference et SKU requis');
   const status=qtyE>0?(qtyR===qtyE?'conforme':'nonconforme'):'pending';
   const data=loadReceptions();
   data.unshift({ref,sku,qtyExpected:qtyE,qtyReceived:qtyR,status,date:new Date().toISOString(),categorie:'reception'});
   saveReceptions(data); clearReceptionForm(); renderReceptions();
-  showToast('✅ Réception - '+(status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
+  showToast('✅ Reception – '+(status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
 }
 
 function renderReceptions(){
   const search=(document.getElementById('rec-search')?.value||'').toLowerCase();
   const filter=document.getElementById('rec-filter')?.value||'';
   const tbody=document.getElementById('reception-tbody'); if(!tbody)return;
-  const all=loadReceptions().filter(r=>(!search||(r.ref+r.sku).toLowerCase().includes(search))&&(!filter||r.status===filter));
-  if(!all.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Aucune réception</td></tr>';return;}
+  const all=loadReceptions().filter(r=>
+    (!search||(r.ref+' '+r.sku).toLowerCase().includes(search))&&
+    (!filter||r.status===filter)
+  );
+  if(!all.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Aucune reception</td></tr>';return;}
+  const sLabel={conforme:'✅ Conforme',nonconforme:'⚠ Non conforme',pending:'⏳ En attente',refused:'❌ Refusee',reserved:'📋 Avec reserve',waiting:'⏸ En attente instruction'};
+  const sBadge={conforme:'conforme',nonconforme:'nonconforme',pending:'en-attente',refused:'badge-urgent',reserved:'badge-en-attente',waiting:'badge-en-attente'};
   tbody.innerHTML=all.map((r,i)=>{
-    const bc=r.status==='conforme'?'conforme':r.status==='nonconforme'?'nonconforme':'en-attente';
-    const bl=r.status==='conforme'?'✅ Conforme':r.status==='nonconforme'?'⚠️ Non conforme':'⏳ En attente';
     const qc=r.qtyReceived<r.qtyExpected?'var(--red)':r.qtyReceived>r.qtyExpected?'var(--orange)':'var(--green)';
+    const actionsHTML = buildReceptionActions(r,i);
     return `<tr>
       <td><code>${r.ref}</code></td><td><code>${r.sku}</code></td>
       <td style="text-align:center">${r.qtyExpected}</td>
       <td style="text-align:center;font-weight:700;color:${qc}">${r.qtyReceived}</td>
       <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
-      <td><span class="badge badge-${bc}">${bl}</span></td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteReception(${i})">🗑️</button></td>
+      <td><span class="badge badge-${sBadge[r.status]||'en-attente'}">${sLabel[r.status]||r.status}</span></td>
+      <td>${actionsHTML}</td>
     </tr>`;
   }).join('');
 }
+
+function buildReceptionActions(r,i) {
+  const final = ['refused','validated'].includes(r.status);
+  if(final) return `<button class="btn btn-red btn-sm" onclick="deleteReception(${i})">🗑</button>`;
+  if(r.status==='conforme'){
+    return `<button class="btn btn-green btn-sm" onclick="validateReception(${i})">✅ Valider la reception</button>
+            <button class="btn btn-red btn-sm" onclick="deleteReception(${i})">🗑</button>`;
+  }
+  if(r.status==='nonconforme'||r.status==='pending'){
+    return `
+      <button class="btn btn-red btn-sm" onclick="openRefuseForm(${i})" title="Refuser la livraison">❌ Refuser</button>
+      <button class="btn btn-orange btn-sm" onclick="openReserveForm(${i})" title="Accepter avec reserve">📋 Reserve</button>
+      <button class="btn btn-gray btn-sm" onclick="receptionAction(${i},'waiting')" title="Mettre en attente">⏸ Attente</button>
+      <button class="btn btn-blue btn-sm" onclick="openContactForm(${i})" title="Contacter fournisseur">📞 Fournisseur</button>
+    `;
+  }
+  if(r.status==='waiting'||r.status==='reserved'){
+    return `
+      <button class="btn btn-green btn-sm" onclick="validateReception(${i})">✅ Valider</button>
+      <button class="btn btn-red btn-sm" onclick="openRefuseForm(${i})">❌ Refuser</button>
+      <button class="btn btn-gray btn-sm" onclick="deleteReception(${i})">🗑</button>
+    `;
+  }
+  return `<button class="btn btn-gray btn-sm" onclick="deleteReception(${i})">🗑</button>`;
+}
+
+function validateReception(i){
+  const data=loadReceptions(); if(!data[i]) return;
+  const r=data[i];
+  // Mettre a jour le stock
+  const art=articles.find(a=>a.sku===r.sku);
+  if(art){ art.qty+=r.qtyReceived; persistData(); renderArticles(); updateStats(); }
+  r.status='validated'; r.actionDate=new Date().toISOString();
+  saveReceptions(data); renderReceptions();
+  showToast('✅ Reception validee – stock mis a jour'+(art?' : '+r.sku+' → '+art.qty+' unites':''));
+}
+
+function receptionAction(i,newStatus){
+  const data=loadReceptions(); if(!data[i]) return;
+  data[i].status=newStatus; data[i].actionDate=new Date().toISOString();
+  saveReceptions(data); renderReceptions();
+  const msg={waiting:'⏸ Reception mise en attente d'instruction',refused:'❌ Livraison refusee'};
+  showToast(msg[newStatus]||'✅ Mis a jour');
+}
+
+function openRefuseForm(i){
+  openModal('Refuser la livraison',
+    `<div class="form-group">
+      <label>Motif du refus</label>
+      <select id="refuse-motif" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px">
+        <option value="qty">Quantite incorrecte</option>
+        <option value="article">Article abime</option>
+        <option value="ref">Reference erronee</option>
+        <option value="autre">Autre</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label>Details</label>
+      <textarea id="refuse-detail" rows="2" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px"></textarea>
+    </div>`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Refuser',cls:'btn-red',fn:()=>{
+      const motif=document.getElementById('refuse-motif')?.value||'';
+      const detail=(document.getElementById('refuse-detail')?.value||'').trim();
+      closeModal();
+      const data=loadReceptions(); if(!data[i]) return;
+      data[i].status='refused'; data[i].refuseMotif='['+motif+'] '+detail; data[i].actionDate=new Date().toISOString();
+      saveReceptions(data); renderReceptions();
+      showToast('❌ Livraison refusee – '+motif);
+    }}]
+  );
+}
+
+function openReserveForm(i){
+  openModal('Accepter avec reserve',
+    `<div class="form-group">
+      <label>Type d'anomalie</label>
+      <select id="reserve-type" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px">
+        <option value="qty">Quantite incorrecte</option>
+        <option value="abime">Article abime</option>
+        <option value="ref">Reference erronee</option>
+        <option value="autre">Autre</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label>Details</label>
+      <textarea id="reserve-detail" rows="2" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px"></textarea>
+    </div>`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Accepter avec reserve',cls:'btn-orange',fn:()=>{
+      const type=document.getElementById('reserve-type')?.value||'';
+      const detail=(document.getElementById('reserve-detail')?.value||'').trim();
+      closeModal();
+      const data=loadReceptions(); if(!data[i]) return;
+      data[i].status='reserved'; data[i].reserveNote='['+type+'] '+detail; data[i].actionDate=new Date().toISOString();
+      saveReceptions(data); renderReceptions();
+      showToast('📋 Reception acceptee avec reserve');
+    }}]
+  );
+}
+
+function openContactForm(i){
+  const data=loadReceptions(); if(!data[i]) return;
+  const r=data[i];
+  openModal('Contacter le fournisseur',
+    `<div style="background:#fff8e1;border-radius:8px;padding:12px;font-size:13px">
+      <p><strong>Reference :</strong> ${r.ref}</p>
+      <p><strong>SKU :</strong> ${r.sku}</p>
+      <p><strong>Probleme :</strong> Qte attendue ${r.qtyExpected} / recue ${r.qtyReceived}</p>
+      <p><strong>Date :</strong> ${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</p>
+      <p style="margin-top:8px;padding:8px;background:#ffebee;border-radius:4px">Action : Contactez le fournisseur en referençant la commande <strong>${r.ref}</strong> et signalez l'ecart de ${Math.abs(r.qtyExpected-r.qtyReceived)} unites.</p>
+    </div>`,
+    [{label:'Fermer',cls:'btn-gray',fn:closeModal}]
+  );
+}
+
 function deleteReception(i){const d=loadReceptions();d.splice(i,1);saveReceptions(d);renderReceptions();}
+
 function addReceptionDemo(){
   const t=Date.now();
   saveReceptions([...loadReceptions(),
