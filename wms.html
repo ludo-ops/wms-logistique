@@ -636,6 +636,7 @@ function renderOrders() {
       <td><code>${o.id}</code></td>
       <td>${o.client||'--'}</td>
       <td style="font-family:monospace;font-size:12px">${o.tracking||'--'}</td>
+      <td>${o.assignedTo||'-'}</td>
       <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
       <td>
         ${o.urgent?'<span class="badge badge-urgent">URGENT</span>':''}
@@ -700,7 +701,15 @@ function viewOrder(id) {
 }
 
 function printOrder(id) {
-  window.open('/print-label?id='+encodeURIComponent(id),'_blank');
+  const o = orders.find(x=>x.id===id);
+  if(!o) return showToast('❌ Commande introuvable');
+  const items = o.items.map(it=>`${it.sku.padEnd(10)} | ${it.name.padEnd(30)} | ${it.qty.toString().padStart(3)} pcs`).join('\n');
+  const printContent = `
+<!DOCTYPE html><html><head><title>Commande ${o.id}</title><style>body{font-family:Arial;font-size:12px;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0f0f0}</style></head><body><h2>Commande ${o.id}</h2><p>Client: ${o.client} | Tracking: ${o.tracking} | Prepare par: ${o.assignedTo||'-'}</p><table><tr><th>SKU</th><th>Article</th><th>Qté</th></tr>${o.items.map(it=>`<tr><td>${it.sku}</td><td>${it.name}</td><td>${it.qty}</td></tr>`).join('')}</table></body></html>`;
+  const w = window.open('','_blank','width=600,height=400');
+  w.document.write(printContent);
+  w.document.close();
+  setTimeout(()=>{ w.print(); }, 500);;
 }
 
 function deleteOrder(id) {
@@ -1110,6 +1119,7 @@ function renderHistorique() {
     return `<tr>
       <td><code>${o.id}</code></td><td>${o.client}</td>
       <td style="font-family:monospace;font-size:12px">${o.tracking}</td>
+      <td>${o.assignedTo||'-'}</td>
       <td><span class="badge ${sBadge[o.status]||''}">${sLabel[o.status]||o.status}</span></td>
       <td>${o.isReal?'<span class="badge badge-urgent">Reelle</span>':'<span class="badge" style="background:#e8f5e9;color:var(--green)">Demo</span>'}</td>
       <td style="text-align:center">${o.items.length}</td>
@@ -1160,6 +1170,7 @@ function renderRetours() {
       <td>${(r.items||[]).map(it=>`<span class="badge" style="background:#e8f0fe;color:var(--blue)">${it}</span>`).join(' ')||'-'}</td>
       <td>${r.motif||'-'}</td>
       <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
+      <td>${o.assignedTo||'-'}</td>
       <td><span class="badge badge-${badgeMap[r.status]||'en-attente'}">${statusMap[r.status]||r.status}</span></td>
       <td>${actionsHTML}</td>
     </tr>`;
@@ -1281,6 +1292,7 @@ function renderReceptions(){
       <td style="text-align:center">${r.qtyExpected}</td>
       <td style="text-align:center;font-weight:700;color:${qc}">${r.qtyReceived}</td>
       <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
+      <td>${o.assignedTo||'-'}</td>
       <td><span class="badge badge-${sBadge[r.status]||'en-attente'}">${sLabel[r.status]||r.status}</span></td>
       <td>${actionsHTML}</td>
     </tr>`;
@@ -1412,6 +1424,31 @@ function addReceptionDemo(){
   renderReceptions();
 }
 
+
+function printArticleQR(sku) {
+  const art = articles.find(a=>a.sku===sku);
+  if(!art) return showToast('❌ Article introuvable');
+  const w = window.open('','_blank','width=400,height=400');
+  w.document.write(`
+<!DOCTYPE html><html><head><title>QR ${sku}</title>
+<style>body{margin:20px;text-align:center;font-family:Arial}canvas{border:1px solid #ddd}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head>
+<body><h3>${sku} - ${art.name}</h3><div id="qrcode"></div><p>${art.location}</p></body></html>`);
+  w.document.close();
+  setTimeout(()=>{ new QRCode(w.document.getElementById('qrcode'), {text:window.location.href.replace(/wms\.html.*$/,'demande.html#cmd-'+sku), width:256,height:256}); }, 100);
+}
+
+function printArticleLabel(sku) {
+  const art = articles.find(a=>a.sku===sku);
+  if(!art) return showToast('❌ Article introuvable');
+  const w = window.open('','_blank','width=500,height=300');
+  w.document.write(`
+<!DOCTYPE html><html><head><title>Etiquette ${sku}</title>
+<style>@media print{body{margin:0;padding:10mm;font-family:Arial;font-size:12pt}}body{margin:20px;padding:20px;border:1px solid #000;font-family:Arial;font-size:14pt;line-height:1.2}h1{font-size:20pt;margin:0 0 5pt}h2{font-size:16pt;margin:5pt 0}p{margin:2pt 0;font-size:12pt}.sku{font-family:monospace;font-size:24pt;font-weight:bold;color:#1a73e8}</style></head>
+<body><h1>${art.name}</h1><p class="sku">${sku}</p><p>${art.location||''}</p><p>Stock: <strong>${art.qty}</strong> unites | Seuil: ${art.threshold||0}</p></body></html>`);
+  w.document.close();
+  setTimeout(()=>{ w.print(); }, 200);
+}
 // ============================================================
 // INIT
 // ============================================================
