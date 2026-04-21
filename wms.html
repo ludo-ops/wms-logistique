@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WMS – Interface Formateur</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <style>
 :root{--blue:#1a73e8;--red:#e53935;--green:#43a047;--orange:#fb8c00;--bg:#f0f4f8;--card:#fff;--txt:#202124;--border:#dadce0}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -70,43 +69,22 @@ tr:hover td{background:#f8f9ff}
   header h1{font-size:15px}
 }
 
-/* ============================================================
-   FEEDBACK SCAN CAMÉRA
-   ============================================================ */
-#scan-feedback-overlay {
-  display:none; position:fixed; inset:0; z-index:500;
-  pointer-events:none; border:8px solid transparent;
-}
-#scan-feedback-overlay.success {
-  display:block; border-color:#43a047; background:rgba(67,160,71,.15);
-  animation:scanFlash .5s forwards;
-}
-#scan-feedback-overlay.error {
-  display:block; border-color:#e53935; background:rgba(229,57,53,.15);
-  animation:scanFlash .5s forwards;
-}
-@keyframes scanFlash {
-  0%{opacity:1} 80%{opacity:.8} 100%{opacity:0}
-}
-#scan-msg-bar {
-  display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%);
-  z-index:501; padding:12px 28px; border-radius:10px; font-size:16px;
-  font-weight:700; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,.2);
-  min-width:260px; max-width:90vw; pointer-events:none;
-}
-#scan-msg-bar.success { display:block; background:#43a047; color:#fff; }
-#scan-msg-bar.error   { display:block; background:#e53935; color:#fff; }
-
-/* ============================================================
-   ONGLETS RETOURS / RÉCEPTION
-   ============================================================ */
-.badge-retour      { background:#7b1fa2; color:#fff; }
-.badge-reception   { background:#00838f; color:#fff; }
-.badge-conforme    { background:#e8f5e9; color:#43a047; }
-.badge-nonconforme { background:#ffebee; color:#e53935; }
-.badge-traite      { background:#e8f5e9; color:#43a047; }
-.badge-en-attente  { background:#fff3e0; color:#fb8c00; }
-
+#scan-feedback-overlay{display:none;position:fixed;inset:0;z-index:500;pointer-events:none;border:8px solid transparent}
+#scan-feedback-overlay.success{display:block;border-color:#43a047;background:rgba(67,160,71,.15);animation:scanFlash .5s forwards}
+#scan-feedback-overlay.error{display:block;border-color:#e53935;background:rgba(229,57,53,.15);animation:scanFlash .5s forwards}
+@keyframes scanFlash{0%{opacity:1}80%{opacity:.8}100%{opacity:0}}
+#scan-msg-bar{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:501;padding:12px 28px;border-radius:10px;font-size:16px;font-weight:700;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.2);min-width:260px;max-width:90vw;pointer-events:none}
+#scan-msg-bar.success{display:block;background:#43a047;color:#fff}
+#scan-msg-bar.error{display:block;background:#e53935;color:#fff}
+.badge-retour{background:#7b1fa2;color:#fff}
+.badge-reception{background:#00838f;color:#fff}
+.badge-conforme{background:#e8f5e9;color:#43a047}
+.badge-nonconforme{background:#ffebee;color:#e53935}
+.badge-traite{background:#e8f5e9;color:#43a047}
+.badge-en-attente{background:#fff3e0;color:#fb8c00}
+.scan-live-box{background:#111;border-radius:10px;overflow:hidden;position:relative;max-width:400px;margin:0 auto}
+.scan-live-box video{width:100%;display:block;min-height:220px}
+.scan-live-box canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 </style>
 </head>
 <body>
@@ -121,6 +99,8 @@ tr:hover td{background:#f8f9ff}
 <nav>
   <button class="tab-btn active" onclick="showTab('tab-dashboard')">📊 Tableau de bord</button>
   <button class="tab-btn" onclick="showTab('tab-orders')">📋 Commandes</button>
+  <button class="tab-btn" onclick="showTab('tab-historique')">📜 Historique</button>
+  <button class="tab-btn" onclick="showTab('tab-scan')">📷 Scan</button>
   <button class="tab-btn" onclick="showTab('tab-retours')">↩️ Retours</button>
   <button class="tab-btn" onclick="showTab('tab-reception')">📦 Réception</button>
   <button class="tab-btn" onclick="showTab('tab-articles')">🗃️ Articles</button>
@@ -250,14 +230,80 @@ tr:hover td{background:#f8f9ff}
 </div>
 
 
-<!-- ============================================================ RETOURS -->
+<!-- ========== HISTORIQUE ========== -->
+<div id="tab-historique" class="tab-content">
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <h2 style="margin:0">📜 Historique des commandes</h2>
+      <input type="text" id="hist-search" placeholder="Rechercher…"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:150px" oninput="renderHistorique()">
+      <select id="hist-filter" onchange="renderHistorique()"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+        <option value="">Tous statuts</option>
+        <option value="pending">En attente</option>
+        <option value="inprogress">En cours</option>
+        <option value="completed">Terminées</option>
+      </select>
+      <button class="btn btn-gray btn-sm" onclick="exportHistoriqueCSV()">⬇️ Export CSV</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>ID</th><th>Client</th><th>Tracking</th><th>Statut</th><th>Type</th><th>Articles</th><th>Avancement</th><th>Date</th></tr></thead>
+        <tbody id="historique-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SCAN FORMATEUR ========== -->
+<div id="tab-scan" class="tab-content">
+  <div class="card">
+    <h2>📷 Scanner un article</h2>
+    <p style="color:#666;font-size:13px;margin-bottom:14px">Scannez le QR/code-barre d'un article pour consulter ou modifier son stock instantanément.</p>
+    <div class="scan-live-box" id="scan-box">
+      <video id="scan-video" autoplay playsinline muted></video>
+      <canvas id="scan-canvas"></canvas>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-blue" id="btn-start-scan" onclick="startFormScan()">▶️ Démarrer la caméra</button>
+      <button class="btn btn-gray" id="btn-stop-scan" onclick="stopFormScan()" style="display:none">⏹️ Arrêter</button>
+    </div>
+    <div id="scan-result-box" style="margin-top:16px;display:none">
+      <div style="background:#e8f5e9;border-radius:8px;padding:14px">
+        <div style="font-weight:700;font-size:15px;color:var(--blue)" id="scan-result-name"></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px">
+          <span>SKU : <strong id="scan-result-sku"></strong></span>
+          <span>Qté : <strong id="scan-result-qty"></strong></span>
+          <span>Emplacement : <strong id="scan-result-loc"></strong></span>
+          <span>Catégorie : <strong id="scan-result-cat"></strong></span>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:13px;font-weight:600">Ajuster la quantité :</label>
+          <input type="number" id="scan-adjust-qty" style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-green btn-sm" onclick="applyScanAdjust()">✅ Mettre à jour</button>
+        </div>
+      </div>
+    </div>
+    <!-- Saisie manuelle fallback -->
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <p style="font-size:13px;color:#666;margin-bottom:8px">Ou entrez un SKU manuellement :</p>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="manual-scan-sku" placeholder="Ex: LOG-001"
+          style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px"
+          onkeydown="if(event.key==='Enter') manualScanLookup()">
+        <button class="btn btn-blue" onclick="manualScanLookup()">🔍 Chercher</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== RETOURS ========== -->
 <div id="tab-retours" class="tab-content">
   <div class="card">
     <h2>↩️ Retours clients</h2>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <input type="text" id="retour-search" placeholder="Rechercher…"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:150px"
-        oninput="renderRetours()">
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:150px" oninput="renderRetours()">
       <select id="retour-filter" onchange="renderRetours()"
         style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
         <option value="">Tous statuts</option>
@@ -267,40 +313,25 @@ tr:hover td{background:#f8f9ff}
     </div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr>
-          <th>Réf. commande</th><th>Articles</th><th>Motif</th>
-          <th>Date</th><th>Statut</th><th>Actions</th>
-        </tr></thead>
+        <thead><tr><th>Réf.</th><th>Articles</th><th>Motif</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody id="retours-tbody"></tbody>
       </table>
     </div>
   </div>
 </div>
 
-<!-- ============================================================ RÉCEPTION -->
+<!-- ========== RÉCEPTION ========== -->
 <div id="tab-reception" class="tab-content">
   <div class="card">
     <h2>📦 Nouvelle réception</h2>
     <div class="form-row">
-      <div class="form-group">
-        <label>Référence réception</label>
-        <input type="text" id="rec-ref" placeholder="Ex: REC-2024-001">
-      </div>
-      <div class="form-group">
-        <label>Article (SKU)</label>
-        <input type="text" id="rec-sku" placeholder="Ex: LOG-001">
-      </div>
-      <div class="form-group" style="flex:0;min-width:110px">
-        <label>Qté attendue</label>
-        <input type="number" id="rec-qty-expected" min="0" placeholder="0">
-      </div>
-      <div class="form-group" style="flex:0;min-width:110px">
-        <label>Qté reçue</label>
-        <input type="number" id="rec-qty-received" min="0" placeholder="0">
-      </div>
+      <div class="form-group"><label>Référence</label><input type="text" id="rec-ref" placeholder="Ex: REC-2024-001"></div>
+      <div class="form-group"><label>SKU article</label><input type="text" id="rec-sku" placeholder="Ex: LOG-001"></div>
+      <div class="form-group" style="flex:0;min-width:110px"><label>Qté attendue</label><input type="number" id="rec-qty-expected" min="0" placeholder="0"></div>
+      <div class="form-group" style="flex:0;min-width:110px"><label>Qté reçue</label><input type="number" id="rec-qty-received" min="0" placeholder="0"></div>
     </div>
     <div style="margin-top:6px;display:flex;gap:10px">
-      <button class="btn btn-blue" onclick="saveReception()">📦 Enregistrer réception</button>
+      <button class="btn btn-blue" onclick="saveReception()">📦 Enregistrer</button>
       <button class="btn btn-gray" onclick="clearReceptionForm()">✖ Effacer</button>
     </div>
   </div>
@@ -308,11 +339,10 @@ tr:hover td{background:#f8f9ff}
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <h2 style="margin:0">📋 Historique réceptions</h2>
       <input type="text" id="rec-search" placeholder="Rechercher…"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:150px"
-        oninput="renderReceptions()">
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:150px" oninput="renderReceptions()">
       <select id="rec-filter" onchange="renderReceptions()"
         style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-        <option value="">Tous statuts</option>
+        <option value="">Tous</option>
         <option value="conforme">Conforme</option>
         <option value="nonconforme">Non conforme</option>
         <option value="pending">En attente</option>
@@ -320,10 +350,7 @@ tr:hover td{background:#f8f9ff}
     </div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr>
-          <th>Référence</th><th>SKU</th><th>Qté attendue</th>
-          <th>Qté reçue</th><th>Date</th><th>Statut</th><th>Actions</th>
-        </tr></thead>
+        <thead><tr><th>Référence</th><th>SKU</th><th>Qté attendue</th><th>Qté reçue</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody id="reception-tbody"></tbody>
       </table>
     </div>
@@ -355,53 +382,34 @@ let articles = [];
 let orders   = [];
 let qrInstance = null;
 
-const socket = io({ reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
+// ── MODE STATIQUE GitHub Pages — localStorage uniquement ─────────────────────
+document.getElementById('conn-status').textContent = '📂 Mode local';
 
-socket.on('connect', () => {
-  document.getElementById('conn-status').textContent = '🟢 Connecté';
-  socket.emit('request_state');
-});
-socket.on('disconnect', () => {
-  document.getElementById('conn-status').textContent = '🔴 Déconnecté';
-});
-socket.on('connect_error', () => {
-  document.getElementById('conn-status').textContent = '⚠️ Erreur connexion';
-});
-
-socket.on('articles_updated', data => {
-  articles = data || [];
-  renderArticles();
-  updateStats();
-  populateCategoryFilter();
-});
-socket.on('orders_updated', data => {
-  orders = data || [];
-  renderOrders();
-  renderUrgentList();
-  updateStats();
-});
-socket.on('urgent_order', order => {
-  playUrgentSound();
-  showToast('🚨 Commande URGENTE reçue : ' + order.id + ' – ' + order.client, 5000);
-});
-socket.on('demo_reset', () => showToast('✅ Démo réinitialisée'));
+function persistData() {
+  localStorage.setItem('wms_articles', JSON.stringify(articles));
+  localStorage.setItem('wms_orders',   JSON.stringify(orders));
+}
+function loadFromStorage() {
+  try { articles = JSON.parse(localStorage.getItem('wms_articles') || 'null') || []; } catch(e){ articles=[]; }
+  try { orders   = JSON.parse(localStorage.getItem('wms_orders')   || 'null') || []; } catch(e){ orders=[]; }
+}
 
 // ============================================================
 // TABS
 // ============================================================
-// ── TABS (6 onglets) ──────────────────────────────────────────────────────────
-const TAB_IDS = ['tab-dashboard','tab-orders','tab-retours','tab-reception','tab-articles','tab-qr'];
+const TAB_IDS = ['tab-dashboard','tab-orders','tab-historique','tab-scan','tab-retours','tab-reception','tab-articles','tab-qr'];
 function showTab(id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  const el = document.getElementById(id);
-  if (el) el.classList.add('active');
+  const el = document.getElementById(id); if(el) el.classList.add('active');
   const idx = TAB_IDS.indexOf(id);
   const btns = document.querySelectorAll('.tab-btn');
-  if (btns[idx]) btns[idx].classList.add('active');
-  if (id==='tab-qr')       setTimeout(generateQR, 100);
-  if (id==='tab-retours')  renderRetours();
-  if (id==='tab-reception')renderReceptions();
+  if(btns[idx]) btns[idx].classList.add('active');
+  if(id==='tab-qr')        setTimeout(generateQR, 100);
+  if(id==='tab-historique') renderHistorique();
+  if(id==='tab-retours')    renderRetours();
+  if(id==='tab-reception')  renderReceptions();
+  if(id==='tab-scan')       initScanTab();
 }
 
 // ============================================================
@@ -519,38 +527,31 @@ function clearArticleForm() {
   });
 }
 
-async function saveArticle() {
-  const sku      = document.getElementById('art-sku').value.trim();
+function saveArticle() {
+  const sku      = document.getElementById('art-sku').value.trim().toUpperCase();
   const name     = document.getElementById('art-name').value.trim();
   const qty      = parseInt(document.getElementById('art-qty').value)||0;
   const location = document.getElementById('art-location').value.trim();
   const category = document.getElementById('art-category').value.trim()||'Divers';
   const threshold= parseInt(document.getElementById('art-threshold').value)||0;
   if (!sku||!name) return showToast('❌ SKU et nom requis');
-
-  const existing = articles.find(a=>a.sku.toUpperCase()===sku.toUpperCase());
-  let res;
-  if (existing) {
-    res = await fetch('/api/articles/'+sku, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,qty,location,category,threshold})});
-  } else {
-    res = await fetch('/api/articles', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku,name,qty,location,category,threshold})});
-  }
-  if (res.ok) { clearArticleForm(); showToast('✅ Article enregistré'); }
-  else { const err=await res.json(); showToast('❌ '+err.error); }
+  const idx = articles.findIndex(a=>a.sku===sku);
+  if(idx>=0) articles[idx]={...articles[idx],name,qty,location,category,threshold};
+  else articles.push({sku,name,qty,location,category,threshold});
+  persistData(); clearArticleForm(); renderArticles(); updateStats(); populateCategoryFilter();
+  showToast('✅ Article enregistré');
 }
 
 function deleteArticle(sku) {
   openModal('Supprimer l\'article',
-    `<p>Êtes-vous sûr de vouloir <strong>supprimer définitivement</strong> l'article <code>${sku}</code> ?</p><p style="color:var(--red);margin-top:8px">⚠️ Cette action est irréversible et l'article ne réapparaîtra pas lors de la prochaine démo.</p>`,
-    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Supprimer',cls:'btn-red',fn:async()=>{
+    `<p>Supprimer définitivement l'article <code>${sku}</code> ?</p>`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Supprimer',cls:'btn-red',fn:()=>{
       closeModal();
-      const res = await fetch('/api/articles/'+sku,{method:'DELETE'});
-      if (res.ok) showToast('🗑️ Article supprimé');
-      else { const err=await res.json(); showToast('❌ '+err.error); }
-    }}]
-  );
+      articles = articles.filter(a=>a.sku!==sku);
+      persistData(); renderArticles(); updateStats(); populateCategoryFilter();
+      showToast('🗑️ Article supprimé');
+    }}]);
 }
-
 // ============================================================
 // COMMANDES
 // ============================================================
@@ -573,40 +574,38 @@ function addOrderItemRow(sku='', qty=1) {
   document.getElementById('order-items-list').appendChild(div);
 }
 
-async function createOrder() {
+function createOrder() {
   const client   = document.getElementById('new-client').value.trim();
   const tracking = document.getElementById('new-tracking').value.trim();
   const isReal   = document.getElementById('new-isreal').value==='true';
   if (!client) return showToast('❌ Client requis');
-
   const itemRows = document.querySelectorAll('#order-items-list > div');
-  const items = [];
-  let valid = true;
-  itemRows.forEach(row => {
-    const skuEl = row.querySelector('select');
-    const qtyEl = row.querySelector('input[type=number]');
-    if (!skuEl||!qtyEl) return;
-    const sku = skuEl.value;
-    const qty = parseInt(qtyEl.value)||1;
-    const art = articles.find(a=>a.sku===sku);
-    if (!art) { valid=false; return; }
-    items.push({sku, name:art.name, qty, location:art.location, scanned:0});
+  const items=[]; let valid=true;
+  itemRows.forEach(row=>{
+    const skuEl=row.querySelector('select'), qtyEl=row.querySelector('input[type=number]');
+    if(!skuEl||!qtyEl) return;
+    const sku=skuEl.value, qty=parseInt(qtyEl.value)||1;
+    const art=articles.find(a=>a.sku===sku);
+    if(!art){valid=false;return;}
+    items.push({sku,name:art.name,qty,location:art.location,scanned:0});
   });
-  if (!valid||!items.length) return showToast('❌ Ajoutez au moins un article valide');
-
-  const body = {client, items, urgent:isReal, isReal, tracking: tracking||''};
-  const res = await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if (res.ok) {
-    document.getElementById('new-client').value='';
-    document.getElementById('new-tracking').value='';
-    document.getElementById('new-isreal').value='false';
-    document.getElementById('order-items-list').innerHTML='';
-    orderItemCount=0;
-    showToast('✅ Commande créée');
-    if (isReal) playUrgentSound();
-  } else { const err=await res.json(); showToast('❌ '+err.error); }
+  if(!valid||!items.length) return showToast('❌ Ajoutez au moins un article valide');
+  const order={
+    id:'ORD-'+Date.now(), client, items,
+    urgent:isReal, isReal,
+    tracking: tracking||('TRK-'+Math.random().toString(36).substring(2,10).toUpperCase()),
+    status:'pending', assignedTo:'', date:new Date().toISOString()
+  };
+  orders.push(order); persistData();
+  document.getElementById('new-client').value='';
+  document.getElementById('new-tracking').value='';
+  document.getElementById('new-isreal').value='false';
+  document.getElementById('order-items-list').innerHTML='';
+  orderItemCount=0;
+  renderOrders(); renderUrgentList(); updateStats();
+  showToast('✅ Commande créée');
+  if(isReal) playUrgentSound();
 }
-
 function renderOrders() {
   const search = (document.getElementById('order-search').value||'').toLowerCase();
   const filter = document.getElementById('order-filter').value;
@@ -694,36 +693,32 @@ function printOrder(id) {
 }
 
 function deleteOrder(id) {
-  const o = orders.find(x=>x.id===id);
-  if (!o) return;
+  const o=orders.find(x=>x.id===id); if(!o) return;
   openModal('Supprimer la commande',
-    `<p>Supprimer la commande <strong>${id}</strong> (${o.client}) ?</p>
-     ${o.isReal?'<p style="color:var(--red);margin-top:8px">⚠️ Il s\'agit d\'une commande réelle !</p>':''}`,
-    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Supprimer',cls:'btn-red',fn:async()=>{
+    `<p>Supprimer <strong>${id}</strong> (${o.client}) ?</p>${o.isReal?'<p style="color:var(--red);margin-top:8px">⚠️ Commande réelle !</p>':''}`,
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Supprimer',cls:'btn-red',fn:()=>{
       closeModal();
-      const res=await fetch('/api/orders/'+id,{method:'DELETE'});
-      if(res.ok) showToast('🗑️ Commande supprimée'); else showToast('❌ Erreur suppression');
-    }}]
-  );
+      orders=orders.filter(x=>x.id!==id);
+      persistData(); renderOrders(); renderUrgentList(); updateStats();
+      showToast('🗑️ Commande supprimée');
+    }}]);
 }
-
-async function resetDemo() {
+function resetDemo() {
   openModal('Réinitialiser la démo',
-    '<p>Cela va <strong>effacer toutes les commandes de démo</strong> et en créer de nouvelles.<br>Les commandes <strong>réelles</strong> seront conservées.</p>',
-    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Réinitialiser',cls:'btn-orange',fn:async()=>{
+    '<p>Efface toutes les commandes démo et en crée de nouvelles.<br>Les commandes <strong>réelles</strong> sont conservées.</p>',
+    [{label:'Annuler',cls:'btn-gray',fn:closeModal},{label:'Réinitialiser',cls:'btn-orange',fn:()=>{
       closeModal();
-      const res = await fetch('/api/reset-demo',{method:'POST'});
-      if(res.ok) {
-    localStorage.removeItem('wms_retours');
-    localStorage.removeItem('wms_receptions');
-    addRetourDemo();
-    addReceptionDemo();
-    showToast('✅ Démo réinitialisée');
-  } else showToast('❌ Erreur');
-    }}]
-  );
+      orders = orders.filter(o=>o.isReal===true);
+      orders = [...orders, ...defaultOrders()];
+      if(!articles.length){ articles=defaultArticles(); }
+      persistData();
+      renderOrders(); renderUrgentList(); updateStats();
+      localStorage.removeItem('wms_retours');
+      localStorage.removeItem('wms_receptions');
+      addRetourDemo(); addReceptionDemo();
+      showToast('✅ Démo réinitialisée');
+    }}]);
 }
-
 // ============================================================
 // MODAL GÉNÉRIQUE
 // ============================================================
@@ -748,190 +743,341 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 
 
 // ============================================================
-// FEEDBACK SCAN CAMÉRA
+// DEFAULT DATA
+// ============================================================
+function defaultArticles() {
+  return [
+    {sku:'LOG-001',name:'Papier A4 (rame 500f)',qty:120,location:'Allée A - Étagère 1',category:'Fournitures',threshold:10},
+    {sku:'LOG-002',name:'Stylos Bleus (boite x20)',qty:85,location:'Allée A - Étagère 2',category:'Fournitures',threshold:10},
+    {sku:'LOG-003',name:'Stylos Rouges (boite x20)',qty:60,location:'Allée A - Étagère 2',category:'Fournitures',threshold:10},
+    {sku:'LOG-004',name:'Classeurs A4 (lot x5)',qty:40,location:'Allée A - Étagère 3',category:'Fournitures',threshold:5},
+    {sku:'LOG-005',name:'Cahiers quadrillés (lot x10)',qty:55,location:'Allée A - Étagère 4',category:'Fournitures',threshold:5},
+    {sku:'LOG-006',name:'Scotch emballage rouleau',qty:200,location:'Allée B - Étagère 1',category:'Emballage',threshold:20},
+    {sku:'LOG-007',name:'Carton 40x30 cm',qty:150,location:'Allée B - Étagère 2',category:'Emballage',threshold:20},
+    {sku:'LOG-008',name:'Carton 60x40 cm',qty:80,location:'Allée B - Étagère 3',category:'Emballage',threshold:10},
+    {sku:'LOG-009',name:'Carton 80x60 cm',qty:45,location:'Allée B - Étagère 4',category:'Emballage',threshold:5},
+    {sku:'LOG-010',name:'Film étirable rouleau',qty:35,location:'Allée B - Étagère 5',category:'Emballage',threshold:5},
+    {sku:'LOG-011',name:'Transpalette manuel',qty:4,location:'Quai 1 - Zone A',category:'Matériel',threshold:1},
+    {sku:'LOG-012',name:'Diable de manutention',qty:6,location:'Quai 1 - Zone B',category:'Matériel',threshold:1},
+    {sku:'LOG-013',name:'Palette bois 120x80 cm',qty:50,location:'Quai 2 - Zone A',category:'Matériel',threshold:5},
+    {sku:'LOG-014',name:'Chariot de stockage',qty:0,location:'Quai 2 - Zone B',category:'Matériel',threshold:1},
+    {sku:'LOG-015',name:'Rolls de manutention',qty:8,location:'Quai 2 - Zone C',category:'Matériel',threshold:2},
+    {sku:'LOG-016',name:'Étiquettes autocollantes rouleau',qty:300,location:'Allée C - Étagère 1',category:'Fournitures',threshold:30},
+    {sku:'LOG-017',name:'Marqueur permanent noir',qty:45,location:'Allée C - Étagère 2',category:'Fournitures',threshold:5},
+    {sku:'LOG-018',name:'Marqueur permanent rouge',qty:30,location:'Allée C - Étagère 2',category:'Fournitures',threshold:5},
+    {sku:'LOG-019',name:'Gants de manutention (paire)',qty:30,location:'Allée C - Étagère 3',category:'EPI',threshold:5},
+    {sku:'LOG-020',name:'Casque sécurité chantier',qty:12,location:'Allée C - Étagère 4',category:'EPI',threshold:3},
+    {sku:'LOG-021',name:'Gilet haute visibilité L',qty:20,location:'Allée C - Étagère 5',category:'EPI',threshold:3},
+    {sku:'LOG-022',name:'Chaussures sécurité p42',qty:0,location:'Allée D - Étagère 1',category:'EPI',threshold:2},
+    {sku:'LOG-023',name:'Boite de rangement 30x20',qty:60,location:'Allée D - Étagère 2',category:'Stockage',threshold:5},
+    {sku:'LOG-024',name:'Bac gerbable 60x40',qty:40,location:'Allée D - Étagère 3',category:'Stockage',threshold:5},
+    {sku:'LOG-025',name:'Sangle arrimage 5m',qty:25,location:'Allée D - Étagère 4',category:'Matériel',threshold:3},
+    {sku:'LOG-026',name:'Cutter industriel',qty:18,location:'Allée D - Étagère 5',category:'Outillage',threshold:2},
+    {sku:'LOG-027',name:'Pistolet à colle thermique',qty:10,location:'Allée E - Étagère 1',category:'Outillage',threshold:2},
+    {sku:'LOG-028',name:'Bâton de colle thermique x50',qty:150,location:'Allée E - Étagère 1',category:'Outillage',threshold:20},
+    {sku:'LOG-029',name:'Ruban de signalisation jaune',qty:15,location:'Allée E - Étagère 2',category:'Sécurité',threshold:2},
+    {sku:'LOG-030',name:'Extincteur poudre 2kg',qty:0,location:'Allée E - Étagère 3',category:'Sécurité',threshold:1},
+    {sku:'MAT-001',name:'Bloc béton 33.19',qty:500,location:'Zone F - Rack 1',category:'Matériaux',threshold:50},
+    {sku:'MAT-002',name:'Bloc béton 19.19',qty:400,location:'Zone F - Rack 1',category:'Matériaux',threshold:50},
+    {sku:'MAT-003',name:'Bloc béton 14',qty:300,location:'Zone F - Rack 2',category:'Matériaux',threshold:30},
+    {sku:'MAT-006',name:'Brique Vandersanden baroque',qty:1000,location:'Zone G - Rack 1',category:'Matériaux',threshold:100},
+    {sku:'MAT-007',name:'Brique Vandersanden jaune',qty:800,location:'Zone G - Rack 1',category:'Matériaux',threshold:100},
+    {sku:'MAT-008',name:'Briques Terca 3 trous',qty:1200,location:'Zone G - Rack 2',category:'Matériaux',threshold:100},
+    {sku:'MAT-009',name:'Moellon',qty:600,location:'Zone G - Rack 3',category:'Matériaux',threshold:50},
+    {sku:'MAT-010',name:'Pré-linteaux 1m40',qty:80,location:'Zone H - Rack 1',category:'Matériaux',threshold:10},
+  ];
+}
+
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function genTracking(){ return 'TRK-'+Math.random().toString(36).substring(2,10).toUpperCase(); }
+
+function defaultOrders() {
+  const now = new Date().toISOString();
+  const pool = defaultArticles().slice(0,20);
+  const eleves = 'ABCDEFGHIJKLMNOPQRSTUVWXY'.split('');
+  const cmds = eleves.map((e,i)=>{
+    const nb = Math.floor(Math.random()*5)+1;
+    const picked = shuffle(pool).slice(0,nb);
+    return {id:'CMD-'+String(i+1).padStart(3,'0'), client:'Élève '+e, assignedTo:'',
+      status:'pending', urgent:false, isReal:false, tracking:genTracking(), date:now,
+      items:picked.map(a=>({sku:a.sku,name:a.name,qty:Math.floor(Math.random()*4)+1,scanned:0,location:a.location}))};
+  });
+  const traps = [
+    {id:'CMD-TRAP1',client:'PIÈGE 1 – Extincteur',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+     items:[{sku:'LOG-001',name:'Papier A4',qty:2,scanned:0,location:'Allée A - Étagère 1'},{sku:'LOG-030',name:'Extincteur poudre 2kg',qty:1,scanned:0,location:'Allée E - Étagère 3'},{sku:'LOG-007',name:'Carton 40x30 cm',qty:3,scanned:0,location:'Allée B - Étagère 2'}]},
+    {id:'CMD-TRAP2',client:'PIÈGE 2 – Chaussures',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+     items:[{sku:'LOG-019',name:'Gants manutention',qty:2,scanned:0,location:'Allée C - Étagère 3'},{sku:'LOG-022',name:'Chaussures sécurité p42',qty:1,scanned:0,location:'Allée D - Étagère 1'},{sku:'LOG-002',name:'Stylos Bleus',qty:4,scanned:0,location:'Allée A - Étagère 2'}]},
+    {id:'CMD-TRAP3',client:'PIÈGE 3 – Chariot',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+     items:[{sku:'LOG-014',name:'Chariot de stockage',qty:1,scanned:0,location:'Quai 2 - Zone B'},{sku:'LOG-005',name:'Cahiers quadrillés',qty:3,scanned:0,location:'Allée A - Étagère 4'},{sku:'LOG-016',name:'Étiquettes autocollantes',qty:2,scanned:0,location:'Allée C - Étagère 1'}]},
+  ];
+  return [...cmds,...traps];
+}
+
+// ============================================================
+// FEEDBACK SCAN
 // ============================================================
 let _scanMsgTimer = null;
 function scanFeedback(type, label) {
   const overlay = document.getElementById('scan-feedback-overlay');
   const bar     = document.getElementById('scan-msg-bar');
-  if (!overlay || !bar) return;
-  // Reset
-  overlay.className = ''; bar.className = '';
-  // Forcer reflow pour relancer l'animation
-  void overlay.offsetWidth;
-  overlay.className = type;
-  bar.className     = type;
-  bar.textContent   = type === 'success'
-    ? '✅ Article scanné : ' + (label || '')
-    : '❌ ' + (label || 'Article non reconnu');
+  if(!overlay||!bar) return;
+  overlay.className=''; bar.className='';
+  void overlay.offsetWidth; // reflow pour relancer animation
+  overlay.className=type; bar.className=type;
+  bar.textContent = type==='success' ? '✅ Article scanné : '+(label||'') : '❌ '+(label||'Article non reconnu');
   clearTimeout(_scanMsgTimer);
-  _scanMsgTimer = setTimeout(() => {
-    overlay.className = '';
-    bar.className = '';
-  }, type === 'success' ? 2000 : 2500);
-  // Son Web Audio
+  _scanMsgTimer = setTimeout(()=>{ overlay.className=''; bar.className=''; }, type==='success'?2000:2500);
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (type === 'success') {
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    if(type==='success'){
+      const osc=ctx.createOscillator(), gain=ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 880; osc.type = 'sine';
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.18);
+      osc.frequency.value=880; osc.type='sine';
+      gain.gain.setValueAtTime(0.4,ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.18);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime+0.18);
     } else {
-      [320, 240].forEach((freq, i) => {
-        const osc = ctx.createOscillator(), gain = ctx.createGain();
+      [320,240].forEach((freq,i)=>{
+        const osc=ctx.createOscillator(), gain=ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = freq; osc.type = 'sawtooth';
-        gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.18);
-        osc.start(ctx.currentTime + i * 0.2); osc.stop(ctx.currentTime + i * 0.2 + 0.18);
+        osc.frequency.value=freq; osc.type='sawtooth';
+        gain.gain.setValueAtTime(0.35,ctx.currentTime+i*0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.2+0.18);
+        osc.start(ctx.currentTime+i*0.2); osc.stop(ctx.currentTime+i*0.2+0.18);
       });
     }
-  } catch(e) { console.warn('Son scan non disponible (autoplay policy)'); }
+  } catch(e){ console.warn('Son scan non disponible'); }
 }
 
-// Hooks socket scan (pour usage depuis demande.html côté formateur si besoin)
-socket.on('scan_ok', data => {
-  const art = articles.find(a => a.sku === data.sku);
-  scanFeedback('success', art ? art.name : data.sku);
-  showToast('✅ Scanné : ' + (art ? art.name : data.sku));
-});
-socket.on('scan_error', data => {
-  scanFeedback('error', data.msg || 'Article non reconnu');
-  showToast('❌ ' + (data.msg || 'Erreur scan'));
-});
+// ============================================================
+// HISTORIQUE
+// ============================================================
+function renderHistorique() {
+  const search = (document.getElementById('hist-search')?.value||'').toLowerCase();
+  const filter = document.getElementById('hist-filter')?.value||'';
+  const tbody  = document.getElementById('historique-tbody');
+  if(!tbody) return;
+  const all = orders.filter(o=>
+    (!search||(o.id+o.client+o.tracking).toLowerCase().includes(search))&&
+    (!filter||o.status===filter)
+  ).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(!all.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Aucune commande</td></tr>'; return; }
+  const statusLabel={pending:'En attente',inprogress:'En cours',completed:'Terminée'};
+  const statusBadge={pending:'badge-pending',inprogress:'badge-inprogress',completed:'badge-completed'};
+  tbody.innerHTML = all.map(o=>{
+    const total=o.items.reduce((s,it)=>s+it.qty,0);
+    const scanned=o.items.reduce((s,it)=>s+(it.scanned||0),0);
+    const pct=total?Math.round(scanned/total*100):0;
+    return `<tr>
+      <td><code>${o.id}</code></td><td>${o.client}</td>
+      <td style="font-family:monospace;font-size:12px">${o.tracking}</td>
+      <td><span class="badge ${statusBadge[o.status]||''}">${statusLabel[o.status]||o.status}</span></td>
+      <td>${o.isReal?'<span class="badge badge-urgent">Réelle</span>':'<span class="badge" style="background:#e8f5e9;color:var(--green)">Démo</span>'}</td>
+      <td style="text-align:center">${o.items.length}</td>
+      <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div style="font-size:11px">${scanned}/${total}</div></td>
+      <td style="font-size:12px">${o.date?new Date(o.date).toLocaleDateString('fr-BE'):'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportHistoriqueCSV() {
+  const rows = [['ID','Client','Tracking','Statut','Type','Articles','Date']];
+  orders.forEach(o=>rows.push([o.id,o.client,o.tracking,o.status,o.isReal?'Réelle':'Démo',o.items.length,o.date?new Date(o.date).toLocaleDateString('fr-BE'):'']));
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('
+');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download='historique_wms.csv'; a.click();
+}
+
+// ============================================================
+// SCAN FORMATEUR (caméra)
+// ============================================================
+let _scanStream=null, _scanAnimFrame=null, _scannedSku=null;
+
+function initScanTab(){ /* prêt mais caméra pas démarrée automatiquement */ }
+
+async function startFormScan() {
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const video = document.getElementById('scan-video');
+    video.srcObject = _scanStream;
+    document.getElementById('btn-start-scan').style.display='none';
+    document.getElementById('btn-stop-scan').style.display='';
+    scanFormLoop();
+  } catch(e) { showToast('❌ Caméra non disponible : '+e.message); }
+}
+
+function stopFormScan() {
+  if(_scanStream) _scanStream.getTracks().forEach(t=>t.stop());
+  _scanStream=null;
+  cancelAnimationFrame(_scanAnimFrame);
+  document.getElementById('btn-start-scan').style.display='';
+  document.getElementById('btn-stop-scan').style.display='none';
+}
+
+function scanFormLoop() {
+  const video  = document.getElementById('scan-video');
+  const canvas = document.getElementById('scan-canvas');
+  if(!canvas||!video||!_scanStream) return;
+  const ctx2 = canvas.getContext('2d');
+  canvas.width=video.videoWidth||400; canvas.height=video.videoHeight||300;
+  ctx2.drawImage(video,0,0,canvas.width,canvas.height);
+  // Utiliser BarcodeDetector si dispo (Chrome/Android)
+  if('BarcodeDetector' in window){
+    const bd = new BarcodeDetector({formats:['qr_code','code_128','ean_13','code_39']});
+    bd.detect(canvas).then(codes=>{
+      if(codes.length){
+        const raw = codes[0].rawValue;
+        stopFormScan();
+        resolveScannedSku(raw);
+      } else { _scanAnimFrame=requestAnimationFrame(scanFormLoop); }
+    }).catch(()=>{ _scanAnimFrame=requestAnimationFrame(scanFormLoop); });
+  } else {
+    // Fallback : BarcodeDetector non dispo — afficher message
+    ctx2.fillStyle='rgba(0,0,0,0.5)'; ctx2.fillRect(0,0,canvas.width,30);
+    ctx2.fillStyle='#fff'; ctx2.font='13px sans-serif';
+    ctx2.fillText('BarcodeDetector non dispo — utilisez la saisie manuelle',8,20);
+    _scanAnimFrame=requestAnimationFrame(scanFormLoop);
+  }
+}
+
+function resolveScannedSku(raw) {
+  const sku = raw.trim().toUpperCase();
+  const art = articles.find(a=>a.sku===sku||raw.includes(a.sku));
+  if(art){ showScanResult(art); scanFeedback('success', art.name); }
+  else { scanFeedback('error','SKU non trouvé : '+sku); showToast('❌ Article non reconnu : '+sku); }
+}
+
+function manualScanLookup() {
+  const val = (document.getElementById('manual-scan-sku')?.value||'').trim().toUpperCase();
+  if(!val) return showToast('❌ Entrez un SKU');
+  const art = articles.find(a=>a.sku===val);
+  if(art){ showScanResult(art); scanFeedback('success',art.name); }
+  else { scanFeedback('error','SKU non trouvé : '+val); }
+}
+
+function showScanResult(art) {
+  _scannedSku = art.sku;
+  document.getElementById('scan-result-name').textContent = art.name;
+  document.getElementById('scan-result-sku').textContent  = art.sku;
+  document.getElementById('scan-result-qty').textContent  = art.qty;
+  document.getElementById('scan-result-loc').textContent  = art.location||'-';
+  document.getElementById('scan-result-cat').textContent  = art.category||'-';
+  document.getElementById('scan-adjust-qty').value        = art.qty;
+  document.getElementById('scan-result-box').style.display='block';
+}
+
+function applyScanAdjust() {
+  if(!_scannedSku) return;
+  const newQty = parseInt(document.getElementById('scan-adjust-qty').value)||0;
+  const idx = articles.findIndex(a=>a.sku===_scannedSku);
+  if(idx<0) return showToast('❌ Article introuvable');
+  articles[idx].qty = newQty;
+  persistData(); renderArticles(); updateStats();
+  document.getElementById('scan-result-qty').textContent = newQty;
+  showToast('✅ Stock mis à jour : '+_scannedSku+' → '+newQty);
+  scanFeedback('success', articles[idx].name);
+}
 
 // ============================================================
 // RETOURS — localStorage
 // ============================================================
-function loadRetours() {
-  try { return JSON.parse(localStorage.getItem('wms_retours') || '[]'); }
-  catch(e) { return []; }
-}
-function saveRetours(data) { localStorage.setItem('wms_retours', JSON.stringify(data)); }
+function loadRetours(){ try{return JSON.parse(localStorage.getItem('wms_retours')||'[]');}catch(e){return[];} }
+function saveRetours(d){ localStorage.setItem('wms_retours',JSON.stringify(d)); }
 
 function renderRetours() {
-  const search = (document.getElementById('retour-search')?.value || '').toLowerCase();
-  const filter = document.getElementById('retour-filter')?.value || '';
-  const tbody  = document.getElementById('retours-tbody');
-  if (!tbody) return;
-  const all = loadRetours().filter(r =>
-    (!search || (r.ref||'').toLowerCase().includes(search) || (r.motif||'').toLowerCase().includes(search)) &&
-    (!filter || r.status === filter)
-  );
-  if (!all.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Aucun retour enregistré</td></tr>';
-    return;
-  }
-  tbody.innerHTML = all.map((r, i) => `
-    <tr>
-      <td><code>${r.ref || '—'}</code></td>
-      <td>${(r.items||[]).map(it=>`<span class="badge" style="background:#e8f0fe;color:var(--blue)">${it}</span>`).join(' ') || '—'}</td>
-      <td>${r.motif || '—'}</td>
-      <td style="font-size:12px">${r.date ? new Date(r.date).toLocaleDateString('fr-BE') : '—'}</td>
-      <td><span class="badge badge-${r.status==='completed'?'traite':'en-attente'}">${r.status==='completed'?'✅ Traité':'⏳ En attente'}</span></td>
-      <td>
-        <button class="btn btn-green btn-sm" onclick="markRetourDone(${i})">✅ Traité</button>
-        <button class="btn btn-red btn-sm" onclick="deleteRetour(${i})">🗑️</button>
-      </td>
-    </tr>`).join('');
+  const search=(document.getElementById('retour-search')?.value||'').toLowerCase();
+  const filter=document.getElementById('retour-filter')?.value||'';
+  const tbody=document.getElementById('retours-tbody'); if(!tbody)return;
+  const all=loadRetours().filter(r=>(!search||(r.ref+r.motif).toLowerCase().includes(search))&&(!filter||r.status===filter));
+  if(!all.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Aucun retour</td></tr>';return;}
+  tbody.innerHTML=all.map((r,i)=>`<tr>
+    <td><code>${r.ref||'-'}</code></td>
+    <td>${(r.items||[]).map(it=>`<span class="badge" style="background:#e8f0fe;color:var(--blue)">${it}</span>`).join(' ')||'-'}</td>
+    <td>${r.motif||'-'}</td>
+    <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
+    <td><span class="badge badge-${r.status==='completed'?'traite':'en-attente'}">${r.status==='completed'?'✅ Traité':'⏳ En attente'}</span></td>
+    <td>
+      <button class="btn btn-green btn-sm" onclick="markRetourDone(${i})">✅</button>
+      <button class="btn btn-red btn-sm" onclick="deleteRetour(${i})">🗑️</button>
+    </td></tr>`).join('');
 }
-
-function markRetourDone(idx) {
-  const data = loadRetours();
-  if (data[idx]) { data[idx].status = 'completed'; saveRetours(data); renderRetours(); }
-}
-function deleteRetour(idx) {
-  const data = loadRetours(); data.splice(idx, 1); saveRetours(data); renderRetours();
-}
-function addRetourDemo() {
-  const t = Date.now();
-  const demos = [
-    { ref:'RET-'+t,    items:['LOG-006','LOG-007'], motif:'Retour client – emballage abîmé',         date:new Date().toISOString(), status:'pending', categorie:'retour' },
-    { ref:'RET-'+(t+1),items:['MAT-001'],           motif:'Annulation partielle – quantité excédentaire', date:new Date().toISOString(), status:'pending', categorie:'retour' },
-    { ref:'RET-'+(t+2),items:['LOG-019','LOG-020'], motif:'Litige qualité – EPI non conformes',     date:new Date().toISOString(), status:'pending', categorie:'retour' },
-  ];
-  saveRetours([...loadRetours(), ...demos]);
+function markRetourDone(i){const d=loadRetours();if(d[i]){d[i].status='completed';saveRetours(d);renderRetours();}}
+function deleteRetour(i){const d=loadRetours();d.splice(i,1);saveRetours(d);renderRetours();}
+function addRetourDemo(){
+  const t=Date.now();
+  saveRetours([...loadRetours(),
+    {ref:'RET-'+t,    items:['LOG-006','LOG-007'],motif:'Retour client – emballage abîmé',         date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+(t+1),items:['MAT-001'],          motif:'Annulation partielle – quantité excédentaire',date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+(t+2),items:['LOG-019','LOG-020'],motif:'Litige qualité – EPI non conformes',      date:new Date().toISOString(),status:'pending',categorie:'retour'},
+  ]);
   renderRetours();
-  showToast('✅ Retours démo ajoutés');
 }
 
 // ============================================================
 // RÉCEPTIONS — localStorage
 // ============================================================
-function loadReceptions() {
-  try { return JSON.parse(localStorage.getItem('wms_receptions') || '[]'); }
-  catch(e) { return []; }
-}
-function saveReceptions(data) { localStorage.setItem('wms_receptions', JSON.stringify(data)); }
+function loadReceptions(){ try{return JSON.parse(localStorage.getItem('wms_receptions')||'[]');}catch(e){return[];} }
+function saveReceptions(d){ localStorage.setItem('wms_receptions',JSON.stringify(d)); }
 
-function clearReceptionForm() {
-  ['rec-ref','rec-sku','rec-qty-expected','rec-qty-received'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-}
-function saveReception() {
-  const ref         = (document.getElementById('rec-ref')?.value || '').trim();
-  const sku         = (document.getElementById('rec-sku')?.value || '').trim().toUpperCase();
-  const qtyExpected = parseInt(document.getElementById('rec-qty-expected')?.value) || 0;
-  const qtyReceived = parseInt(document.getElementById('rec-qty-received')?.value) || 0;
-  if (!ref || !sku) return showToast('❌ Référence et SKU requis');
-  let status = 'pending';
-  if (qtyExpected > 0 && qtyReceived >= 0)
-    status = qtyReceived === qtyExpected ? 'conforme' : 'nonconforme';
-  const rec = { ref, sku, qtyExpected, qtyReceived, status, date: new Date().toISOString(), categorie:'reception' };
-  const data = loadReceptions(); data.unshift(rec);
+function clearReceptionForm(){['rec-ref','rec-sku','rec-qty-expected','rec-qty-received'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';})}
+
+function saveReception(){
+  const ref=(document.getElementById('rec-ref')?.value||'').trim();
+  const sku=(document.getElementById('rec-sku')?.value||'').trim().toUpperCase();
+  const qtyE=parseInt(document.getElementById('rec-qty-expected')?.value)||0;
+  const qtyR=parseInt(document.getElementById('rec-qty-received')?.value)||0;
+  if(!ref||!sku) return showToast('❌ Référence et SKU requis');
+  const status=qtyE>0?(qtyR===qtyE?'conforme':'nonconforme'):'pending';
+  const data=loadReceptions();
+  data.unshift({ref,sku,qtyExpected:qtyE,qtyReceived:qtyR,status,date:new Date().toISOString(),categorie:'reception'});
   saveReceptions(data); clearReceptionForm(); renderReceptions();
-  showToast('✅ Réception enregistrée – ' + (status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
+  showToast('✅ Réception – '+(status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
 }
-function renderReceptions() {
-  const search = (document.getElementById('rec-search')?.value || '').toLowerCase();
-  const filter = document.getElementById('rec-filter')?.value || '';
-  const tbody  = document.getElementById('reception-tbody');
-  if (!tbody) return;
-  const all = loadReceptions().filter(r =>
-    (!search || (r.ref||'').toLowerCase().includes(search) || (r.sku||'').toLowerCase().includes(search)) &&
-    (!filter || r.status === filter)
-  );
-  if (!all.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Aucune réception enregistrée</td></tr>';
-    return;
-  }
-  tbody.innerHTML = all.map((r, i) => {
-    const bc = r.status==='conforme'?'conforme':r.status==='nonconforme'?'nonconforme':'en-attente';
-    const bl = r.status==='conforme'?'✅ Conforme':r.status==='nonconforme'?'⚠️ Non conforme':'⏳ En attente';
-    const qColor = r.qtyReceived < r.qtyExpected ? 'var(--red)' : r.qtyReceived > r.qtyExpected ? 'var(--orange)' : 'var(--green)';
+
+function renderReceptions(){
+  const search=(document.getElementById('rec-search')?.value||'').toLowerCase();
+  const filter=document.getElementById('rec-filter')?.value||'';
+  const tbody=document.getElementById('reception-tbody'); if(!tbody)return;
+  const all=loadReceptions().filter(r=>(!search||(r.ref+r.sku).toLowerCase().includes(search))&&(!filter||r.status===filter));
+  if(!all.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Aucune réception</td></tr>';return;}
+  tbody.innerHTML=all.map((r,i)=>{
+    const bc=r.status==='conforme'?'conforme':r.status==='nonconforme'?'nonconforme':'en-attente';
+    const bl=r.status==='conforme'?'✅ Conforme':r.status==='nonconforme'?'⚠️ Non conforme':'⏳ En attente';
+    const qc=r.qtyReceived<r.qtyExpected?'var(--red)':r.qtyReceived>r.qtyExpected?'var(--orange)':'var(--green)';
     return `<tr>
-      <td><code>${r.ref}</code></td>
-      <td><code>${r.sku}</code></td>
+      <td><code>${r.ref}</code></td><td><code>${r.sku}</code></td>
       <td style="text-align:center">${r.qtyExpected}</td>
-      <td style="text-align:center;font-weight:700;color:${qColor}">${r.qtyReceived}</td>
-      <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'—'}</td>
+      <td style="text-align:center;font-weight:700;color:${qc}">${r.qtyReceived}</td>
+      <td style="font-size:12px">${r.date?new Date(r.date).toLocaleDateString('fr-BE'):'-'}</td>
       <td><span class="badge badge-${bc}">${bl}</span></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteReception(${i})">🗑️</button></td>
     </tr>`;
   }).join('');
 }
-function deleteReception(idx) {
-  const data = loadReceptions(); data.splice(idx, 1); saveReceptions(data); renderReceptions();
-}
-function addReceptionDemo() {
-  const t = Date.now();
-  const demos = [
-    { ref:'REC-'+t,    sku:'MAT-001', qtyExpected:500, qtyReceived:500, status:'conforme',    date:new Date().toISOString(), categorie:'reception' },
-    { ref:'REC-'+(t+1),sku:'LOG-006', qtyExpected:100, qtyReceived:87,  status:'nonconforme', date:new Date().toISOString(), categorie:'reception' },
-    { ref:'REC-'+(t+2),sku:'LOG-019', qtyExpected:30,  qtyReceived:0,   status:'pending',     date:new Date().toISOString(), categorie:'reception' },
-  ];
-  saveReceptions([...loadReceptions(), ...demos]); renderReceptions();
-  showToast('✅ Réceptions démo ajoutées');
+function deleteReception(i){const d=loadReceptions();d.splice(i,1);saveReceptions(d);renderReceptions();}
+function addReceptionDemo(){
+  const t=Date.now();
+  saveReceptions([...loadReceptions(),
+    {ref:'REC-'+t,    sku:'MAT-001',qtyExpected:500,qtyReceived:500,status:'conforme',   date:new Date().toISOString(),categorie:'reception'},
+    {ref:'REC-'+(t+1),sku:'LOG-006',qtyExpected:100,qtyReceived:87, status:'nonconforme',date:new Date().toISOString(),categorie:'reception'},
+    {ref:'REC-'+(t+2),sku:'LOG-019',qtyExpected:30, qtyReceived:0,  status:'pending',    date:new Date().toISOString(),categorie:'reception'},
+  ]);
+  renderReceptions();
 }
 
 // ============================================================
 // INIT
 // ============================================================
+loadFromStorage();
+if(!articles.length){ articles=defaultArticles(); persistData(); }
+if(!orders.length)  { orders=defaultOrders();    persistData(); }
+renderArticles(); renderOrders(); renderUrgentList(); updateStats(); populateCategoryFilter();
 addOrderItemRow();
+// Démos retours/réceptions si vides
+if(!loadRetours().length)    addRetourDemo();
+if(!loadReceptions().length) addReceptionDemo();
 </script>
 </body>
 </html>
