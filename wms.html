@@ -1327,7 +1327,7 @@ function receptionAction(i,newStatus){
   const data=loadReceptions(); if(!data[i]) return;
   data[i].status=newStatus; data[i].actionDate=new Date().toISOString();
   saveReceptions(data); renderReceptions();
-  const msg={waiting:'⏸ Reception mise en attente d'instruction',refused:'❌ Livraison refusee'};
+  const msg={waiting:`⏸ Reception mise en attente d'instruction`,refused:`❌ Livraison refusee`};
   showToast(msg[newStatus]||'✅ Mis a jour');
 }
 
