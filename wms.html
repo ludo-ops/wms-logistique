@@ -382,7 +382,7 @@ let articles = [];
 let orders   = [];
 let qrInstance = null;
 
-// ── MODE STATIQUE GitHub Pages — localStorage uniquement ─────────────────────
+// -- MODE STATIQUE GitHub Pages -- localStorage uniquement ---------------------
 document.getElementById('conn-status').textContent = '📂 Mode local';
 
 function persistData() {
@@ -490,8 +490,8 @@ function renderArticles() {
       <td><code>${a.sku}</code></td>
       <td>${a.name}</td>
       <td style="text-align:center;color:${a.qty<=a.threshold?'var(--red)':'inherit'};font-weight:${a.qty<=a.threshold?'700':'400'}">${a.qty}</td>
-      <td>${a.location||'—'}</td>
-      <td><span class="badge" style="background:#e8f0fe;color:var(--blue)">${a.category||'—'}</span></td>
+      <td>${a.location||'--'}</td>
+      <td><span class="badge" style="background:#e8f0fe;color:var(--blue)">${a.category||'--'}</span></td>
       <td style="text-align:center">${a.threshold}</td>
       <td>
         <button class="btn btn-blue btn-sm" onclick="editArticle('${a.sku}')">✏️</button>
@@ -559,7 +559,7 @@ let orderItemCount = 0;
 function addOrderItemRow(sku='', qty=1) {
   orderItemCount++;
   const id = 'oi-'+orderItemCount;
-  const options = articles.map(a=>`<option value="${a.sku}" ${a.sku===sku?'selected':''}>${a.sku} – ${a.name}</option>`).join('');
+  const options = articles.map(a=>`<option value="${a.sku}" ${a.sku===sku?'selected':''}>${a.sku} - ${a.name}</option>`).join('');
   const div = document.createElement('div');
   div.className='form-row';
   div.id=id;
@@ -623,8 +623,8 @@ function renderOrders() {
     const pct     = total>0?Math.round(scanned/total*100):0;
     return `<tr>
       <td><code>${o.id}</code></td>
-      <td>${o.client||'—'}</td>
-      <td style="font-family:monospace;font-size:12px">${o.tracking||'—'}</td>
+      <td>${o.client||'--'}</td>
+      <td style="font-family:monospace;font-size:12px">${o.tracking||'--'}</td>
       <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
       <td>
         ${o.urgent?'<span class="badge badge-urgent">URGENT</span>':''}
@@ -654,8 +654,8 @@ function renderUrgentList() {
   if (!urgents.length) { ul.innerHTML='<em style="color:#999">Aucune commande urgente.</em>'; return; }
   ul.innerHTML = urgents.map(o=>`
     <div class="order-item-row">
-      <span><span class="badge badge-urgent">URGENT</span> <strong>${o.id}</strong> – ${o.client}</span>
-      <span style="font-size:12px;color:#666">${o.tracking||'—'}</span>
+      <span><span class="badge badge-urgent">URGENT</span> <strong>${o.id}</strong> - ${o.client}</span>
+      <span style="font-size:12px;color:#666">${o.tracking||'--'}</span>
       <div>
         <button class="btn btn-blue btn-sm" onclick="viewOrder('${o.id}')">👁️</button>
         <button class="btn btn-green btn-sm" onclick="printOrder('${o.id}')">🖨️</button>
@@ -677,7 +677,7 @@ function viewOrder(id) {
   openModal('Détail commande ' + o.id,
     `<div style="margin-bottom:10px">
       <strong>Client :</strong> ${o.client} &nbsp;|&nbsp;
-      <strong>Tracking :</strong> <code>${o.tracking||'—'}</code> &nbsp;|&nbsp;
+      <strong>Tracking :</strong> <code>${o.tracking||'--'}</code> &nbsp;|&nbsp;
       <strong>Statut :</strong> ${statusLabel(o.status)}<br>
       ${o.urgent?'<span class="badge badge-urgent" style="margin-top:6px">URGENT</span>':''}
       ${o.isReal?'<span class="badge badge-real" style="margin-top:6px;margin-left:4px">Réelle</span>':''}
@@ -803,11 +803,11 @@ function defaultOrders() {
       items:picked.map(a=>({sku:a.sku,name:a.name,qty:Math.floor(Math.random()*4)+1,scanned:0,location:a.location}))};
   });
   const traps = [
-    {id:'CMD-TRAP1',client:'PIÈGE 1 – Extincteur',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+    {id:'CMD-TRAP1',client:'PIÈGE 1 - Extincteur',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
      items:[{sku:'LOG-001',name:'Papier A4',qty:2,scanned:0,location:'Allée A - Étagère 1'},{sku:'LOG-030',name:'Extincteur poudre 2kg',qty:1,scanned:0,location:'Allée E - Étagère 3'},{sku:'LOG-007',name:'Carton 40x30 cm',qty:3,scanned:0,location:'Allée B - Étagère 2'}]},
-    {id:'CMD-TRAP2',client:'PIÈGE 2 – Chaussures',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+    {id:'CMD-TRAP2',client:'PIÈGE 2 - Chaussures',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
      items:[{sku:'LOG-019',name:'Gants manutention',qty:2,scanned:0,location:'Allée C - Étagère 3'},{sku:'LOG-022',name:'Chaussures sécurité p42',qty:1,scanned:0,location:'Allée D - Étagère 1'},{sku:'LOG-002',name:'Stylos Bleus',qty:4,scanned:0,location:'Allée A - Étagère 2'}]},
-    {id:'CMD-TRAP3',client:'PIÈGE 3 – Chariot',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
+    {id:'CMD-TRAP3',client:'PIÈGE 3 - Chariot',assignedTo:'',status:'pending',urgent:false,isReal:false,tracking:genTracking(),date:now,
      items:[{sku:'LOG-014',name:'Chariot de stockage',qty:1,scanned:0,location:'Quai 2 - Zone B'},{sku:'LOG-005',name:'Cahiers quadrillés',qty:3,scanned:0,location:'Allée A - Étagère 4'},{sku:'LOG-016',name:'Étiquettes autocollantes',qty:2,scanned:0,location:'Allée C - Étagère 1'}]},
   ];
   return [...cmds,...traps];
@@ -882,11 +882,11 @@ function renderHistorique() {
 
 function exportHistoriqueCSV() {
   const rows = [['ID','Client','Tracking','Statut','Type','Articles','Date']];
-  orders.forEach(o=>rows.push([o.id,o.client,o.tracking,o.status,o.isReal?'Réelle':'Démo',o.items.length,o.date?new Date(o.date).toLocaleDateString('fr-BE'):'']));
-  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('
-');
+  orders.forEach(o=>rows.push([o.id,o.client,o.tracking,o.status,o.isReal?'Reelle':'Demo',o.items.length,o.date?new Date(o.date).toLocaleDateString('fr-BE'):'']));
+  const sep = '\n';
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join(sep);
   const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.href='data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download='historique_wms.csv'; a.click();
 }
 
@@ -934,10 +934,10 @@ function scanFormLoop() {
       } else { _scanAnimFrame=requestAnimationFrame(scanFormLoop); }
     }).catch(()=>{ _scanAnimFrame=requestAnimationFrame(scanFormLoop); });
   } else {
-    // Fallback : BarcodeDetector non dispo — afficher message
+    // Fallback : BarcodeDetector non dispo -- afficher message
     ctx2.fillStyle='rgba(0,0,0,0.5)'; ctx2.fillRect(0,0,canvas.width,30);
     ctx2.fillStyle='#fff'; ctx2.font='13px sans-serif';
-    ctx2.fillText('BarcodeDetector non dispo — utilisez la saisie manuelle',8,20);
+    ctx2.fillText('BarcodeDetector non dispo -- utilisez la saisie manuelle',8,20);
     _scanAnimFrame=requestAnimationFrame(scanFormLoop);
   }
 }
@@ -981,7 +981,7 @@ function applyScanAdjust() {
 }
 
 // ============================================================
-// RETOURS — localStorage
+// RETOURS -- localStorage
 // ============================================================
 function loadRetours(){ try{return JSON.parse(localStorage.getItem('wms_retours')||'[]');}catch(e){return[];} }
 function saveRetours(d){ localStorage.setItem('wms_retours',JSON.stringify(d)); }
@@ -1008,15 +1008,15 @@ function deleteRetour(i){const d=loadRetours();d.splice(i,1);saveRetours(d);rend
 function addRetourDemo(){
   const t=Date.now();
   saveRetours([...loadRetours(),
-    {ref:'RET-'+t,    items:['LOG-006','LOG-007'],motif:'Retour client – emballage abîmé',         date:new Date().toISOString(),status:'pending',categorie:'retour'},
-    {ref:'RET-'+(t+1),items:['MAT-001'],          motif:'Annulation partielle – quantité excédentaire',date:new Date().toISOString(),status:'pending',categorie:'retour'},
-    {ref:'RET-'+(t+2),items:['LOG-019','LOG-020'],motif:'Litige qualité – EPI non conformes',      date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+t,    items:['LOG-006','LOG-007'],motif:'Retour client - emballage abîmé',         date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+(t+1),items:['MAT-001'],          motif:'Annulation partielle - quantité excédentaire',date:new Date().toISOString(),status:'pending',categorie:'retour'},
+    {ref:'RET-'+(t+2),items:['LOG-019','LOG-020'],motif:'Litige qualité - EPI non conformes',      date:new Date().toISOString(),status:'pending',categorie:'retour'},
   ]);
   renderRetours();
 }
 
 // ============================================================
-// RÉCEPTIONS — localStorage
+// RÉCEPTIONS -- localStorage
 // ============================================================
 function loadReceptions(){ try{return JSON.parse(localStorage.getItem('wms_receptions')||'[]');}catch(e){return[];} }
 function saveReceptions(d){ localStorage.setItem('wms_receptions',JSON.stringify(d)); }
@@ -1033,7 +1033,7 @@ function saveReception(){
   const data=loadReceptions();
   data.unshift({ref,sku,qtyExpected:qtyE,qtyReceived:qtyR,status,date:new Date().toISOString(),categorie:'reception'});
   saveReceptions(data); clearReceptionForm(); renderReceptions();
-  showToast('✅ Réception – '+(status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
+  showToast('✅ Réception - '+(status==='conforme'?'Conforme':status==='nonconforme'?'Non conforme':'En attente'));
 }
 
 function renderReceptions(){
