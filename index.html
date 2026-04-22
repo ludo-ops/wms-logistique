@@ -1,88 +1,225 @@
+<!-- Fichier : index.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WMS Logistique</title>
-  <style>
-    :root {
-      --blue:#1a73e8;
-      --blue-soft:#e8f0fe;
-      --green:#2e7d32;
-      --bg:#f3f6fb;
-      --card:#ffffff;
-      --shadow:0 10px 28px rgba(26,115,232,.11);
-      --radius:20px;
-    }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body {
-      font-family:Segoe UI, Arial, sans-serif;
-      background:var(--bg);
-      min-height:100vh;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-    }
-    .card {
-      background:var(--card);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:40px 36px;
-      max-width:480px;
-      width:100%;
-      text-align:center;
-      border:1px solid #e8edf6;
-    }
-    .logo { font-size:48px; margin-bottom:16px; }
-    h1 { font-size:26px; color:#1a1a2e; margin-bottom:8px; }
-    .sub { color:#666; font-size:15px; margin-bottom:36px; }
-    .btn-group { display:flex; flex-direction:column; gap:14px; }
-    .btn {
-      display:block;
-      text-decoration:none;
-      border-radius:14px;
-      padding:18px 22px;
-      font-weight:700;
-      font-size:16px;
-      transition:.18s;
-      cursor:pointer;
-      border:none;
-    }
-    .btn:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.12); }
-    .btn.blue {
-      background:linear-gradient(135deg,#1a73e8,#1557b0);
-      color:#fff;
-    }
-    .btn.green {
-      background:linear-gradient(135deg,#2e7d32,#1b5e20);
-      color:#fff;
-    }
-    .btn .icon { font-size:22px; margin-bottom:4px; display:block; }
-    .btn .desc { font-size:12px; font-weight:400; opacity:.85; margin-top:4px; }
-    footer { margin-top:22px; color:#aaa; font-size:12px; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WMS Formation — Accueil</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --border: #1e3a5f;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --text: #c9d6e3;
+    --dim: #4a6080;
+    --green: #00ff88;
+    --font-head: 'Exo 2', sans-serif;
+    --font-mono: 'Share Tech Mono', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* Animated grid background */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,.05) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridScroll 20s linear infinite;
+    z-index:0;
+  }
+  @keyframes gridScroll {
+    0%{ background-position: 0 0; }
+    100%{ background-position: 60px 60px; }
+  }
+  body::after {
+    content:'';
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(0,80,160,.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, rgba(255,107,53,.1) 0%, transparent 60%);
+    z-index:0;
+  }
+  .container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    padding: 2rem;
+    max-width: 700px;
+    width: 100%;
+  }
+  .logo-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .logo-icon {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem;
+    box-shadow: 0 0 24px rgba(0,212,255,.4);
+  }
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, #fff 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+  .subtitle {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: .85rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .tagline {
+    color: var(--dim);
+    font-size: 1rem;
+    margin-bottom: 3rem;
+    font-weight: 300;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  @media(max-width:500px){ .cards{ grid-template-columns:1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2.5rem 1.5rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    transition: all .3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content:'';
+    position:absolute; inset:0;
+    opacity:0;
+    transition: opacity .3s;
+  }
+  .card.blue::before { background: radial-gradient(circle at 50% 0%, rgba(0,212,255,.12), transparent 70%); }
+  .card.orange::before { background: radial-gradient(circle at 50% 0%, rgba(255,107,53,.12), transparent 70%); }
+  .card:hover { transform: translateY(-4px); }
+  .card.blue:hover { border-color: var(--accent); box-shadow: 0 8px 32px rgba(0,212,255,.2); }
+  .card.orange:hover { border-color: var(--accent2); box-shadow: 0 8px 32px rgba(255,107,53,.2); }
+  .card:hover::before { opacity:1; }
+  .card-icon {
+    font-size: 2.8rem;
+    line-height:1;
+  }
+  .card-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .card-desc {
+    font-size: .85rem;
+    color: var(--dim);
+    font-weight: 300;
+  }
+  .badge {
+    position:absolute; top:12px; right:12px;
+    padding:3px 10px;
+    border-radius:20px;
+    font-family: var(--font-mono);
+    font-size:.7rem;
+    letter-spacing:1px;
+  }
+  .badge.supervisor { background: rgba(0,212,255,.15); color: var(--accent); border:1px solid rgba(0,212,255,.3); }
+  .badge.employee { background: rgba(255,107,53,.15); color: var(--accent2); border:1px solid rgba(255,107,53,.3); }
+  .status-bar {
+    font-family: var(--font-mono);
+    font-size: .75rem;
+    color: var(--dim);
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+  .status-item { display:flex; align-items:center; gap:.4rem; }
+  .dot { width:6px;height:6px;border-radius:50%; }
+  .dot.green { background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse 2s infinite; }
+  .dot.blue { background:var(--accent); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .scan-line {
+    position:fixed;
+    top:0; left:0; width:100%; height:2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanDown 4s linear infinite;
+    z-index:5;
+    opacity:.4;
+  }
+  @keyframes scanDown {
+    0%{top:0%} 100%{top:100%}
+  }
+  .version {
+    position:fixed; bottom:1rem; right:1rem;
+    font-family:var(--font-mono); font-size:.65rem; color:var(--dim); z-index:10;
+  }
+</style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo">📦</div>
-    <h1>WMS Logistique</h1>
-    <p class="sub">Choisissez votre interface pour commencer</p>
-
-    <div class="btn-group">
-      <a href="wms.html" class="btn blue">
-        <span class="icon">🖥️</span>
-        Interface Formateur
-        <div class="desc">Gestion des commandes, articles, QR code</div>
-      </a>
-      <a href="demande.html" class="btn green">
-        <span class="icon">📋</span>
-        Interface Employé
-        <div class="desc">Préparation et scan des commandes</div>
-      </a>
-    </div>
+<div class="scan-line"></div>
+<div class="container">
+  <div class="subtitle">WMS Formation v2.0</div>
+  <div class="logo-bar">
+    <div class="logo-icon">📦</div>
+    <h1>LogiTrain</h1>
   </div>
-  <footer>WMS Logistique — Formation ISLLG</footer>
+  <p class="tagline">Système de gestion d'entrepôt — Environnement de formation</p>
+
+  <div class="cards">
+    <a href="wms.html" class="card blue">
+      <span class="badge supervisor">SUPERVISEUR</span>
+      <div class="card-icon">🖥️</div>
+      <div class="card-title">Interface WMS</div>
+      <div class="card-desc">Commandes · Retours · Réceptions · Scénarios · Historique</div>
+    </a>
+    <a href="demande.html" class="card orange">
+      <span class="badge employee">EMPLOYÉ</span>
+      <div class="card-icon">📋</div>
+      <div class="card-title">Passer une commande</div>
+      <div class="card-desc">Sélection articles · Infos client · Envoi urgent</div>
+    </a>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-item"><span class="dot green"></span> Système opérationnel</div>
+    <div class="status-item"><span class="dot blue"></span> Firebase connecté</div>
+    <div class="status-item">⚡ Formation logistique</div>
+  </div>
+</div>
+<div class="version">WMS Formation © 2025</div>
 </body>
 </html>
