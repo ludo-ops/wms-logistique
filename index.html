@@ -1,225 +1,1391 @@
-<!-- Fichier : index.html -->
+<!-- Fichier : wms.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>WMS Formation — Accueil</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap" rel="stylesheet"/>
+<title>WMS — Interface Superviseur</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;500;600;800&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg: #0a0e1a;
-    --panel: #111827;
-    --border: #1e3a5f;
-    --accent: #00d4ff;
-    --accent2: #ff6b35;
-    --text: #c9d6e3;
-    --dim: #4a6080;
-    --green: #00ff88;
-    --font-head: 'Exo 2', sans-serif;
-    --font-mono: 'Share Tech Mono', monospace;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-head);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-  }
-  /* Animated grid background */
-  body::before {
-    content:'';
-    position:fixed; inset:0;
-    background-image:
-      linear-gradient(rgba(0,212,255,.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,212,255,.05) 1px, transparent 1px);
-    background-size: 60px 60px;
-    animation: gridScroll 20s linear infinite;
-    z-index:0;
-  }
-  @keyframes gridScroll {
-    0%{ background-position: 0 0; }
-    100%{ background-position: 60px 60px; }
-  }
-  body::after {
-    content:'';
-    position:fixed; inset:0;
-    background: radial-gradient(ellipse at 20% 50%, rgba(0,80,160,.15) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 50%, rgba(255,107,53,.1) 0%, transparent 60%);
-    z-index:0;
-  }
-  .container {
-    position: relative;
-    z-index: 10;
-    text-align: center;
-    padding: 2rem;
-    max-width: 700px;
-    width: 100%;
-  }
-  .logo-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-  }
-  .logo-icon {
-    width: 52px; height: 52px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem;
-    box-shadow: 0 0 24px rgba(0,212,255,.4);
-  }
-  h1 {
-    font-size: clamp(2.2rem, 6vw, 3.5rem);
-    font-weight: 800;
-    letter-spacing: -1px;
-    background: linear-gradient(135deg, #fff 30%, var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.1;
-  }
-  .subtitle {
-    font-family: var(--font-mono);
-    color: var(--accent);
-    font-size: .85rem;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    margin-bottom: 0.5rem;
-  }
-  .tagline {
-    color: var(--dim);
-    font-size: 1rem;
-    margin-bottom: 3rem;
-    font-weight: 300;
-  }
-  .cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
-  @media(max-width:500px){ .cards{ grid-template-columns:1fr; } }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 2.5rem 1.5rem;
-    cursor: pointer;
-    text-decoration: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    transition: all .3s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  .card::before {
-    content:'';
-    position:absolute; inset:0;
-    opacity:0;
-    transition: opacity .3s;
-  }
-  .card.blue::before { background: radial-gradient(circle at 50% 0%, rgba(0,212,255,.12), transparent 70%); }
-  .card.orange::before { background: radial-gradient(circle at 50% 0%, rgba(255,107,53,.12), transparent 70%); }
-  .card:hover { transform: translateY(-4px); }
-  .card.blue:hover { border-color: var(--accent); box-shadow: 0 8px 32px rgba(0,212,255,.2); }
-  .card.orange:hover { border-color: var(--accent2); box-shadow: 0 8px 32px rgba(255,107,53,.2); }
-  .card:hover::before { opacity:1; }
-  .card-icon {
-    font-size: 2.8rem;
-    line-height:1;
-  }
-  .card-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #fff;
-  }
-  .card-desc {
-    font-size: .85rem;
-    color: var(--dim);
-    font-weight: 300;
-  }
-  .badge {
-    position:absolute; top:12px; right:12px;
-    padding:3px 10px;
-    border-radius:20px;
-    font-family: var(--font-mono);
-    font-size:.7rem;
-    letter-spacing:1px;
-  }
-  .badge.supervisor { background: rgba(0,212,255,.15); color: var(--accent); border:1px solid rgba(0,212,255,.3); }
-  .badge.employee { background: rgba(255,107,53,.15); color: var(--accent2); border:1px solid rgba(255,107,53,.3); }
-  .status-bar {
-    font-family: var(--font-mono);
-    font-size: .75rem;
-    color: var(--dim);
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    flex-wrap: wrap;
-  }
-  .status-item { display:flex; align-items:center; gap:.4rem; }
-  .dot { width:6px;height:6px;border-radius:50%; }
-  .dot.green { background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse 2s infinite; }
-  .dot.blue { background:var(--accent); }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
-  .scan-line {
-    position:fixed;
-    top:0; left:0; width:100%; height:2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scanDown 4s linear infinite;
-    z-index:5;
-    opacity:.4;
-  }
-  @keyframes scanDown {
-    0%{top:0%} 100%{top:100%}
-  }
-  .version {
-    position:fixed; bottom:1rem; right:1rem;
-    font-family:var(--font-mono); font-size:.65rem; color:var(--dim); z-index:10;
-  }
+:root {
+  --bg:#0a0e1a; --panel:#111827; --panel2:#0d1520;
+  --border:#1e3a5f; --border2:#243b55;
+  --accent:#00d4ff; --accent2:#ff6b35; --green:#00ff88;
+  --yellow:#ffd700; --red:#ff4455; --purple:#a855f7;
+  --text:#c9d6e3; --dim:#4a6080; --white:#fff;
+  --font-head:'Exo 2',sans-serif; --font-mono:'Share Tech Mono',monospace;
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-head);min-height:100vh;font-size:14px;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:50px 50px;z-index:0;pointer-events:none;}
+
+/* ── Header ── */
+.header{position:sticky;top:0;z-index:100;background:rgba(10,14,26,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;}
+.header-logo{font-size:1.4rem;}
+.header-title{font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:-0.5px;}
+.header-sub{font-family:var(--font-mono);font-size:.7rem;color:var(--accent);letter-spacing:2px;}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:1rem;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.urgent-alert{display:none;background:var(--red);color:#fff;padding:.4rem 1rem;border-radius:20px;font-size:.8rem;font-weight:700;animation:urgentPulse 1s infinite;cursor:pointer;}
+@keyframes urgentPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,68,85,.6)}50%{box-shadow:0 0 0 8px rgba(255,68,85,0)}}
+.btn-home{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:8px;cursor:pointer;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;}
+.btn-home:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── Nav tabs ── */
+.nav{display:flex;gap:.25rem;padding:.5rem 1.5rem;background:var(--panel2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.nav::-webkit-scrollbar{display:none;}
+.nav-tab{padding:.55rem 1.2rem;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--dim);border:1px solid transparent;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:.5rem;}
+.nav-tab:hover{color:var(--text);background:rgba(255,255,255,.05);}
+.nav-tab.active{background:rgba(0,212,255,.12);border-color:rgba(0,212,255,.3);color:var(--accent);}
+.nav-tab .badge-count{background:var(--accent2);color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;font-family:var(--font-mono);}
+.nav-tab .badge-count.urgent-c{background:var(--red);}
+
+/* ── Main layout ── */
+.main{position:relative;z-index:1;padding:1.5rem;}
+.section{display:none;}
+.section.active{display:block;}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center;}
+.search-box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;color:var(--text);font-family:var(--font-head);font-size:.85rem;flex:1;min-width:180px;}
+.search-box:focus{outline:none;border-color:var(--accent);}
+.search-box::placeholder{color:var(--dim);}
+select.filter{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;color:var(--text);font-size:.85rem;cursor:pointer;}
+select.filter:focus{outline:none;border-color:var(--accent);}
+.btn{padding:.5rem 1rem;border-radius:8px;border:none;cursor:pointer;font-size:.83rem;font-weight:600;font-family:var(--font-head);transition:all .2s;display:inline-flex;align-items:center;gap:.4rem;}
+.btn-primary{background:var(--accent);color:#000;}
+.btn-primary:hover{background:#00b8d9;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-danger:hover{opacity:.85;}
+.btn-success{background:var(--green);color:#000;}
+.btn-success:hover{opacity:.85;}
+.btn-warn{background:var(--yellow);color:#000;}
+.btn-warn:hover{opacity:.85;}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-purple{background:var(--purple);color:#fff;}
+.btn-sm{padding:.3rem .7rem;font-size:.75rem;}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem;margin-bottom:1.25rem;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem;position:relative;overflow:hidden;}
+.stat-card::after{content:'';position:absolute;top:0;left:0;width:3px;height:100%;border-radius:3px 0 0 3px;}
+.stat-card.c-blue::after{background:var(--accent);}
+.stat-card.c-orange::after{background:var(--accent2);}
+.stat-card.c-green::after{background:var(--green);}
+.stat-card.c-red::after{background:var(--red);}
+.stat-card.c-yellow::after{background:var(--yellow);}
+.stat-val{font-size:1.8rem;font-weight:800;color:#fff;font-family:var(--font-mono);}
+.stat-label{font-size:.72rem;color:var(--dim);margin-top:.2rem;text-transform:uppercase;letter-spacing:1px;}
+
+/* ── Table ── */
+.table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:rgba(0,212,255,.07);border-bottom:1px solid var(--border);}
+th{padding:.7rem 1rem;text-align:left;font-size:.73rem;text-transform:uppercase;letter-spacing:1px;color:var(--dim);font-weight:600;white-space:nowrap;}
+td{padding:.75rem 1rem;border-bottom:1px solid rgba(255,255,255,.04);font-size:.85rem;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.cmd-ref{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);}
+.tag{display:inline-flex;align-items:center;gap:.3rem;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;}
+.tag.urgent{background:rgba(255,68,85,.15);color:var(--red);border:1px solid rgba(255,68,85,.3);}
+.tag.standard{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.2);}
+.tag.express{background:rgba(255,215,0,.1);color:var(--yellow);border:1px solid rgba(255,215,0,.2);}
+.tag.retour{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.2);}
+.status{display:inline-flex;align-items:center;gap:.4rem;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;}
+.status::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.status.en-attente{background:rgba(255,165,0,.1);color:orange;}
+.status.en-attente::before{background:orange;}
+.status.en-cours{background:rgba(0,212,255,.1);color:var(--accent);}
+.status.en-cours::before{background:var(--accent);animation:blink 1s infinite;}
+.status.expediee{background:rgba(0,255,136,.1);color:var(--green);}
+.status.expediee::before{background:var(--green);}
+.status.conforme{background:rgba(0,255,136,.1);color:var(--green);}
+.status.conforme::before{background:var(--green);}
+.status.non-conforme{background:rgba(255,68,85,.1);color:var(--red);}
+.status.non-conforme::before{background:var(--red);}
+.status.quarantaine{background:rgba(168,85,247,.1);color:var(--purple);}
+.status.quarantaine::before{background:var(--purple);}
+.status.resolue{background:rgba(0,255,136,.1);color:var(--green);}
+.status.resolue::before{background:var(--green);}
+.actions-cell{display:flex;gap:.4rem;flex-wrap:wrap;}
+.progress-bar{background:rgba(255,255,255,.08);border-radius:20px;height:6px;overflow:hidden;min-width:80px;}
+.progress-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--accent),var(--green));transition:width .3s;}
+.empty-state{text-align:center;padding:3rem;color:var(--dim);}
+.empty-state .es-icon{font-size:3rem;margin-bottom:.5rem;}
+
+/* ── Scan section ── */
+.scan-layout{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;}
+@media(max-width:768px){.scan-layout{grid-template-columns:1fr;}}
+.scan-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;}
+.scan-panel h3{font-size:.9rem;font-weight:700;color:#fff;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
+#camera-container{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3;max-width:100%;}
+#camera-video{width:100%;height:100%;object-fit:cover;display:block;}
+.cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.scan-frame{width:60%;aspect-ratio:1;border:2px solid var(--accent);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.4);position:relative;}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:16px;height:16px;border-color:var(--green);border-style:solid;}
+.scan-frame::before{top:-2px;left:-2px;border-width:3px 0 0 3px;}
+.scan-frame::after{bottom:-2px;right:-2px;border-width:0 3px 3px 0;}
+.cam-indicator{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:4px 16px;border-radius:20px;font-family:var(--font-mono);font-size:.75rem;transition:all .3s;}
+.cam-indicator.waiting{background:rgba(255,68,85,.8);color:#fff;}
+.cam-indicator.success{background:rgba(0,255,136,.9);color:#000;}
+.cam-indicator.fail{background:rgba(255,107,53,.9);color:#fff;}
+.cam-flash{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .1s;border-radius:10px;}
+.cam-flash.green{background:rgba(0,255,136,.3);}
+.cam-flash.red{background:rgba(255,68,85,.3);}
+.scan-msg{text-align:center;padding:.5rem;font-size:.85rem;min-height:1.5rem;font-weight:600;}
+.scan-msg.ok{color:var(--green);}
+.scan-msg.err{color:var(--red);}
+.cam-controls{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;}
+.select-order{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:.5rem;color:var(--text);margin-bottom:.75rem;}
+.scan-items{max-height:250px;overflow-y:auto;margin-top:.5rem;}
+.scan-item-row{display:flex;justify-content:space-between;align-items:center;padding:.4rem .5rem;border-radius:6px;margin-bottom:3px;}
+.scan-item-row.done{background:rgba(0,255,136,.08);}
+.scan-item-row.pending{background:rgba(255,255,255,.04);}
+.scan-item-row.partial{background:rgba(255,215,0,.08);}
+.scan-progress-wrap{margin-top:1rem;}
+.scan-pct{font-family:var(--font-mono);font-size:1.4rem;font-weight:700;color:var(--accent);text-align:center;}
+
+/* ── History ── */
+.hist-entry{display:flex;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid rgba(255,255,255,.04);align-items:flex-start;}
+.hist-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.hist-content{flex:1;}
+.hist-title{font-size:.85rem;color:#fff;font-weight:600;}
+.hist-detail{font-size:.75rem;color:var(--dim);margin-top:2px;}
+.hist-time{font-family:var(--font-mono);font-size:.7rem;color:var(--dim);}
+.hist-list{max-height:600px;overflow-y:auto;}
+
+/* ── Scenarios ── */
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;}
+.scenario-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;cursor:pointer;transition:all .3s;position:relative;overflow:hidden;}
+.scenario-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;}
+.scenario-card.easy::before{background:radial-gradient(circle at 50% 0%,rgba(0,255,136,.1),transparent 60%);}
+.scenario-card.medium::before{background:radial-gradient(circle at 50% 0%,rgba(255,215,0,.1),transparent 60%);}
+.scenario-card.advanced::before{background:radial-gradient(circle at 50% 0%,rgba(255,107,53,.1),transparent 60%);}
+.scenario-card.expert::before{background:radial-gradient(circle at 50% 0%,rgba(255,68,85,.1),transparent 60%);}
+.scenario-card:hover{transform:translateY(-2px);}
+.scenario-card:hover::before{opacity:1;}
+.scenario-card.easy:hover{border-color:var(--green);box-shadow:0 4px 20px rgba(0,255,136,.15);}
+.scenario-card.medium:hover{border-color:var(--yellow);box-shadow:0 4px 20px rgba(255,215,0,.15);}
+.scenario-card.advanced:hover{border-color:var(--accent2);box-shadow:0 4px 20px rgba(255,107,53,.15);}
+.scenario-card.expert:hover{border-color:var(--red);box-shadow:0 4px 20px rgba(255,68,85,.15);}
+.scenario-level{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:.75rem;}
+.scenario-card.easy .scenario-level{color:var(--green);}
+.scenario-card.medium .scenario-level{color:var(--yellow);}
+.scenario-card.advanced .scenario-level{color:var(--accent2);}
+.scenario-card.expert .scenario-level{color:var(--red);}
+.scenario-name{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:.5rem;}
+.scenario-desc{font-size:.8rem;color:var(--dim);line-height:1.5;margin-bottom:1rem;}
+.scenario-tags{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:1rem;}
+.s-tag{padding:2px 8px;border-radius:20px;font-size:.7rem;background:rgba(255,255,255,.06);color:var(--dim);}
+.scenario-active{display:none;background:rgba(0,255,136,.1);color:var(--green);border:1px solid rgba(0,255,136,.3);padding:.3rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;margin-top:.5rem;}
+.scenario-card.loaded .scenario-active{display:inline-flex;}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:2rem;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;position:relative;}
+.modal h3{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
+.modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--dim);cursor:pointer;font-size:1.2rem;}
+.modal-close:hover{color:var(--red);}
+.form-group{margin-bottom:1rem;}
+.form-group label{display:block;font-size:.78rem;color:var(--dim);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.5px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:.55rem .8rem;color:var(--text);font-family:var(--font-head);font-size:.85rem;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent);}
+.modal-actions{display:flex;gap:.75rem;margin-top:1.5rem;justify-content:flex-end;}
+.recap-table{width:100%;border-collapse:collapse;margin:1rem 0;}
+.recap-table th,.recap-table td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border);font-size:.83rem;}
+.recap-table th{color:var(--dim);font-size:.72rem;text-transform:uppercase;}
+.feedback-box{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1rem;}
+.feedback-stat{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.85rem;}
+.feedback-stat:last-child{border-bottom:none;}
+.feedback-val{font-family:var(--font-mono);font-weight:700;color:var(--accent);}
+.badge-award{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:20px;font-size:.8rem;font-weight:700;margin:.25rem;}
+.badge-award.gold{background:rgba(255,215,0,.15);color:var(--yellow);border:1px solid rgba(255,215,0,.3);}
+.badge-award.green{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.3);}
+.badge-award.blue{background:rgba(0,212,255,.12);color:var(--accent);border:1px solid rgba(0,212,255,.3);}
+
+/* ── Toast ── */
+.toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;}
+.toast{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:.75rem 1.25rem;font-size:.83rem;min-width:260px;animation:slideIn .3s ease;display:flex;align-items:center;gap:.6rem;}
+.toast.success{border-left:3px solid var(--green);}
+.toast.error{border-left:3px solid var(--red);}
+.toast.info{border-left:3px solid var(--accent);}
+.toast.warn{border-left:3px solid var(--yellow);}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{to{transform:translateX(100px);opacity:0}}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .main{padding:1rem;}
+  .header{padding:.6rem 1rem;}
+  th,td{padding:.5rem .6rem;}
+  .actions-cell{flex-direction:column;}
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+}
+.loading{display:flex;align-items:center;justify-content:center;padding:2rem;gap:.75rem;color:var(--dim);}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-<div class="scan-line"></div>
-<div class="container">
-  <div class="subtitle">WMS Formation v2.0</div>
-  <div class="logo-bar">
-    <div class="logo-icon">📦</div>
-    <h1>LogiTrain</h1>
-  </div>
-  <p class="tagline">Système de gestion d'entrepôt — Environnement de formation</p>
 
-  <div class="cards">
-    <a href="wms.html" class="card blue">
-      <span class="badge supervisor">SUPERVISEUR</span>
-      <div class="card-icon">🖥️</div>
-      <div class="card-title">Interface WMS</div>
-      <div class="card-desc">Commandes · Retours · Réceptions · Scénarios · Historique</div>
-    </a>
-    <a href="demande.html" class="card orange">
-      <span class="badge employee">EMPLOYÉ</span>
-      <div class="card-icon">📋</div>
-      <div class="card-title">Passer une commande</div>
-      <div class="card-desc">Sélection articles · Infos client · Envoi urgent</div>
-    </a>
+<!-- ══ HEADER ══════════════════════════════════════ -->
+<div class="header">
+  <div class="header-logo">📦</div>
+  <div>
+    <div class="header-title">LogiTrain WMS</div>
+    <div class="header-sub">INTERFACE SUPERVISEUR</div>
   </div>
-
-  <div class="status-bar">
-    <div class="status-item"><span class="dot green"></span> Système opérationnel</div>
-    <div class="status-item"><span class="dot blue"></span> Firebase connecté</div>
-    <div class="status-item">⚡ Formation logistique</div>
+  <div class="header-right">
+    <span class="live-dot" title="Connecté"></span>
+    <div id="urgent-alert" class="urgent-alert" onclick="switchTab('commandes')">🚨 URGENT</div>
+    <a href="index.html" class="btn-home">🏠 Accueil</a>
   </div>
 </div>
-<div class="version">WMS Formation © 2025</div>
+
+<!-- ══ NAV TABS ══════════════════════════════════════ -->
+<div class="nav">
+  <div class="nav-tab active" onclick="switchTab('commandes')" id="tab-commandes">
+    📦 Commandes <span id="cnt-commandes" class="badge-count">0</span>
+  </div>
+  <div class="nav-tab" onclick="switchTab('retours')" id="tab-retours">
+    ↩️ Retours <span id="cnt-retours" class="badge-count">0</span>
+  </div>
+  <div class="nav-tab" onclick="switchTab('reception')" id="tab-reception">
+    🚚 Réception <span id="cnt-reception" class="badge-count">0</span>
+  </div>
+  <div class="nav-tab" onclick="switchTab('scan')" id="tab-scan">
+    📷 Scan / Prép.
+  </div>
+  <div class="nav-tab" onclick="switchTab('historique')" id="tab-historique">
+    📋 Historique
+  </div>
+  <div class="nav-tab" onclick="switchTab('scenarios')" id="tab-scenarios">
+    🎮 Scénarios
+  </div>
+</div>
+
+<!-- ══ MAIN CONTENT ════════════════════════════════ -->
+<div class="main">
+
+  <!-- ─ COMMANDES ─ -->
+  <div class="section active" id="section-commandes">
+    <div class="stats-row" id="stats-commandes"></div>
+    <div class="toolbar">
+      <input class="search-box" placeholder="🔍 Recherche référence, client…" oninput="filterCommandes(this.value)"/>
+      <select class="filter" onchange="filterCommandeStatus(this.value)">
+        <option value="">Tous les statuts</option>
+        <option value="en-attente">En attente</option>
+        <option value="en-cours">En cours</option>
+        <option value="expediee">Expédiée</option>
+      </select>
+      <select class="filter" onchange="filterCommandeMode(this.value)">
+        <option value="">Tous modes</option>
+        <option value="Standard">Standard</option>
+        <option value="Express">Express</option>
+        <option value="Urgent">Urgent</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="generateDemoCommandes()">🔄 Démo 35</button>
+      <button class="btn btn-ghost btn-sm" onclick="purgeCommandes()">🗑️ Purger</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Référence</th><th>Client</th><th>Responsable</th><th>Mode</th>
+          <th>Statut</th><th>Progression</th><th>Date/Heure</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody-commandes"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─ RETOURS ─ -->
+  <div class="section" id="section-retours">
+    <div class="toolbar">
+      <button class="btn btn-ghost btn-sm" onclick="generateDemoRetours()">🔄 Générer 10 retours démo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Référence</th><th>Article</th><th>Qté</th><th>Motif</th><th>Statut</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody-retours"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─ RECEPTION ─ -->
+  <div class="section" id="section-reception">
+    <div class="toolbar">
+      <button class="btn btn-ghost btn-sm" onclick="generateDemoReceptions()">🔄 Générer 10 réceptions démo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Référence</th><th>Fournisseur</th><th>Articles</th><th>Qté attendue</th><th>Statut</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody-receptions"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─ SCAN / PREP ─ -->
+  <div class="section" id="section-scan">
+    <div class="scan-layout">
+      <div class="scan-panel">
+        <h3>📷 Scanner d'articles</h3>
+        <label class="form-group">
+          <span style="font-size:.75rem;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:.3rem;">Sélectionner commande</span>
+          <select class="select-order" id="scan-order-select" onchange="loadScanOrder()">
+            <option value="">— Choisir une commande —</option>
+          </select>
+        </label>
+        <div id="camera-container">
+          <video id="camera-video" autoplay muted playsinline></video>
+          <div class="cam-overlay">
+            <div class="scan-frame"></div>
+          </div>
+          <div class="cam-flash green" id="flash-green"></div>
+          <div class="cam-flash red" id="flash-red"></div>
+          <div class="cam-indicator waiting" id="cam-indicator">⏳ En attente</div>
+        </div>
+        <div class="scan-msg" id="scan-msg"></div>
+        <div class="cam-controls">
+          <button class="btn btn-primary btn-sm" onclick="startCamera()">📷 Démarrer</button>
+          <button class="btn btn-ghost btn-sm" onclick="stopCamera()">⏹ Arrêter</button>
+          <button class="btn btn-ghost btn-sm" onclick="simulateScan()">🎯 Simuler scan</button>
+        </div>
+      </div>
+      <div class="scan-panel">
+        <h3>📋 Progression commande</h3>
+        <div id="scan-order-info">
+          <div class="empty-state"><div class="es-icon">📦</div><p>Sélectionnez une commande</p></div>
+        </div>
+        <div id="scan-items-list" class="scan-items"></div>
+        <div id="scan-progress-wrap" class="scan-progress-wrap" style="display:none">
+          <div class="scan-pct" id="scan-pct">0%</div>
+          <div class="progress-bar" style="height:10px;margin:.5rem 0"><div class="progress-fill" id="scan-progress-fill"></div></div>
+          <div style="margin-top:.75rem;text-align:center">
+            <button class="btn btn-success" id="btn-validate-scan" onclick="validateScanOrder()" style="display:none">✅ Valider la commande</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─ HISTORIQUE ─ -->
+  <div class="section" id="section-historique">
+    <div class="toolbar">
+      <input class="search-box" placeholder="🔍 Rechercher dans l'historique…" oninput="filterHistorique(this.value)"/>
+      <button class="btn btn-ghost btn-sm" onclick="loadHistorique()">🔄 Actualiser</button>
+      <button class="btn btn-danger btn-sm" onclick="clearHistorique()">🗑️ Effacer</button>
+    </div>
+    <div class="table-wrap hist-list" id="hist-list">
+      <div class="loading"><div class="spinner"></div> Chargement…</div>
+    </div>
+  </div>
+
+  <!-- ─ SCENARIOS ─ -->
+  <div class="section" id="section-scenarios">
+    <div style="margin-bottom:1.25rem">
+      <h2 style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:.4rem">🎮 Scénarios de formation</h2>
+      <p style="font-size:.85rem;color:var(--dim)">Chargez un scénario pour générer automatiquement des commandes, retours et réceptions d'entraînement.</p>
+    </div>
+    <div class="scenario-grid">
+      <div class="scenario-card easy" onclick="loadScenario('easy')" id="card-easy">
+        <div class="scenario-level">⭐ Facile</div>
+        <div class="scenario-name">Premier jour</div>
+        <div class="scenario-desc">10 commandes simples, 3 réceptions, 3 retours. Tout conforme. Idéal pour découvrir le système.</div>
+        <div class="scenario-tags">
+          <span class="s-tag">10 commandes</span><span class="s-tag">3 réceptions</span><span class="s-tag">3 retours</span><span class="s-tag">100% conforme</span>
+        </div>
+        <button class="btn btn-success btn-sm">▶ Charger ce scénario</button>
+        <div class="scenario-active">✅ Scénario actif</div>
+      </div>
+      <div class="scenario-card medium" onclick="loadScenario('medium')" id="card-medium">
+        <div class="scenario-level">⭐⭐ Moyen</div>
+        <div class="scenario-name">Semaine chargée</div>
+        <div class="scenario-desc">20 commandes, 5 réceptions, 5 retours. Quelques non‑conformités à gérer.</div>
+        <div class="scenario-tags">
+          <span class="s-tag">20 commandes</span><span class="s-tag">5 réceptions</span><span class="s-tag">5 retours</span><span class="s-tag">NC partielles</span>
+        </div>
+        <button class="btn btn-warn btn-sm">▶ Charger ce scénario</button>
+        <div class="scenario-active">✅ Scénario actif</div>
+      </div>
+      <div class="scenario-card advanced" onclick="loadScenario('advanced')" id="card-advanced">
+        <div class="scenario-level">⭐⭐⭐ Avancé</div>
+        <div class="scenario-name">Crise logistique</div>
+        <div class="scenario-desc">25–30 commandes, 8 réceptions, 8 retours. Stock incorrect, articles manquants, adresses invalides.</div>
+        <div class="scenario-tags">
+          <span class="s-tag">30 commandes</span><span class="s-tag">8 réceptions</span><span class="s-tag">Stock NC</span><span class="s-tag">Urgences</span>
+        </div>
+        <button class="btn btn-danger btn-sm">▶ Charger ce scénario</button>
+        <div class="scenario-active">✅ Scénario actif</div>
+      </div>
+      <div class="scenario-card expert" onclick="loadScenario('expert')" id="card-expert">
+        <div class="scenario-level">⭐⭐⭐⭐ Expert</div>
+        <div class="scenario-name">Journée noire</div>
+        <div class="scenario-desc">35 commandes, 10 réceptions, 10 retours. Erreurs cumulées, litiges, multi-colis, urgents simultanés.</div>
+        <div class="scenario-tags">
+          <span class="s-tag">35 commandes</span><span class="s-tag">Litiges</span><span class="s-tag">Multi-colis</span><span class="s-tag">Chaos total</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="border-color:var(--red);color:var(--red)">▶ Charger ce scénario</button>
+        <div class="scenario-active">✅ Scénario actif</div>
+      </div>
+    </div>
+    <div style="margin-top:1.5rem;display:flex;gap:.75rem;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="resetScenarios()">🔄 Réinitialiser tous les scénarios</button>
+      <button class="btn btn-ghost" id="btn-progress" onclick="showProgress()">📊 Voir progression élèves</button>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══ MODALS ═══════════════════════════════════════ -->
+
+<!-- Détail / validation commande -->
+<div class="modal-overlay" id="modal-commande">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-commande')">✕</button>
+    <h3 id="modal-cmd-title">📦 Détail commande</h3>
+    <div id="modal-cmd-body"></div>
+    <div class="modal-actions" id="modal-cmd-actions"></div>
+  </div>
+</div>
+
+<!-- Feedback après commande -->
+<div class="modal-overlay" id="modal-feedback">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-feedback')">✕</button>
+    <h3>🎉 Commande validée !</h3>
+    <div id="modal-feedback-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal('modal-feedback')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Litige -->
+<div class="modal-overlay" id="modal-litige">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-litige')">✕</button>
+    <h3>⚠️ Signaler un litige</h3>
+    <div class="form-group">
+      <label>Type de litige</label>
+      <select id="litige-type">
+        <option>Marchandise endommagée</option>
+        <option>Quantité incorrecte</option>
+        <option>Mauvais article</option>
+        <option>Retard de livraison</option>
+        <option>Autre</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="litige-desc" style="min-height:80px;resize:vertical" placeholder="Décrivez le problème…"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Gravité</label>
+      <select id="litige-gravity">
+        <option value="faible">Faible</option>
+        <option value="moyenne" selected>Moyenne</option>
+        <option value="haute">Haute</option>
+        <option value="critique">Critique</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-litige')">Annuler</button>
+      <button class="btn btn-danger" onclick="submitLitige()">📤 Envoyer litige</button>
+    </div>
+  </div>
+</div>
+
+<!-- Impression -->
+<div class="modal-overlay" id="modal-print">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-print')">✕</button>
+    <h3>🖨️ Fiche d'expédition</h3>
+    <div id="print-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-print')">Fermer</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ══ FIREBASE + LOGIC ═══════════════════════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ══ Firebase config ══
+// IMPORTANT: Remplacez par votre propre config Firebase !
+const firebaseConfig = {
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
+};
+
+let db, useFirebase = false;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  useFirebase = true;
+  console.log("✅ Firebase connecté");
+} catch(e) {
+  console.warn("⚠️ Firebase non configuré, mode localStorage");
+}
+
+// ══ In-memory / localStorage fallback ══
+let DATA = {
+  commandes: JSON.parse(localStorage.getItem('wms_commandes')||'[]'),
+  retours: JSON.parse(localStorage.getItem('wms_retours')||'[]'),
+  receptions: JSON.parse(localStorage.getItem('wms_receptions')||'[]'),
+  historique: JSON.parse(localStorage.getItem('wms_historique')||'[]'),
+};
+function saveLocal(key){ localStorage.setItem('wms_'+key, JSON.stringify(DATA[key])); }
+
+// ══ Articles catalogue ══
+const ARTICLES = [
+  // Papier / cahiers
+  {id:'ART001',nom:'Ramette papier A4 80g',ref:'PAP-A4-80',cat:'Papier',prix:4.99,stock:200},
+  {id:'ART002',nom:'Ramette papier A3 80g',ref:'PAP-A3-80',cat:'Papier',prix:8.99,stock:80},
+  {id:'ART003',nom:'Cahier grands carreaux 96p A4',ref:'CAH-GC96',cat:'Cahiers',prix:2.49,stock:150},
+  {id:'ART004',nom:'Cahier petits carreaux 96p A4',ref:'CAH-PC96',cat:'Cahiers',prix:2.49,stock:120},
+  {id:'ART005',nom:'Cahier spirale A5 200p',ref:'CAH-SPA5',cat:'Cahiers',prix:3.99,stock:90},
+  {id:'ART006',nom:'Bloc-notes A5 repositionnable',ref:'BLO-A5R',cat:'Cahiers',prix:3.29,stock:60},
+  // Écriture
+  {id:'ART010',nom:'Stylo bille bleu BIC',ref:'STY-BIC-BL',cat:'Ecriture',prix:0.49,stock:500},
+  {id:'ART011',nom:'Stylo bille noir BIC',ref:'STY-BIC-NO',cat:'Ecriture',prix:0.49,stock:480},
+  {id:'ART012',nom:'Stylo roller gel 0.5mm',ref:'STY-ROL05',cat:'Ecriture',prix:1.99,stock:200},
+  {id:'ART013',nom:'Feutre pointe fine noir',ref:'FEU-FIN-NO',cat:'Ecriture',prix:1.29,stock:150},
+  {id:'ART014',nom:'Surligneur jaune',ref:'SUR-JAU',cat:'Ecriture',prix:0.99,stock:300},
+  {id:'ART015',nom:'Surligneur rose',ref:'SUR-ROS',cat:'Ecriture',prix:0.99,stock:250},
+  {id:'ART016',nom:'Crayon HB (boîte 12)',ref:'CRA-HB12',cat:'Ecriture',prix:2.99,stock:120},
+  {id:'ART017',nom:'Gomme blanche',ref:'GOM-BLA',cat:'Ecriture',prix:0.39,stock:400},
+  {id:'ART018',nom:'Taille-crayon métal',ref:'TAI-MET',cat:'Ecriture',prix:0.99,stock:180},
+  // Classement
+  {id:'ART020',nom:'Classeur A4 dos 8cm rouge',ref:'CLA-A4-8R',cat:'Classement',prix:3.99,stock:100},
+  {id:'ART021',nom:'Classeur A4 dos 8cm bleu',ref:'CLA-A4-8B',cat:'Classement',prix:3.99,stock:100},
+  {id:'ART022',nom:'Intercalaires A4 (jeu 12)',ref:'INT-A4-12',cat:'Classement',prix:2.49,stock:200},
+  {id:'ART023',nom:'Chemise cartonnée A4 bleu',ref:'CHE-A4-BL',cat:'Classement',prix:0.79,stock:300},
+  {id:'ART024',nom:'Pochette plastique perforée (100)',ref:'POC-PER100',cat:'Classement',prix:4.99,stock:80},
+  {id:'ART025',nom:'Boîte archive carton',ref:'BOI-ARC',cat:'Classement',prix:2.29,stock:150},
+  {id:'ART026',nom:'Étiquettes adhésives blanches A4 (25f)',ref:'ETI-A4-25',cat:'Classement',prix:6.99,stock:60},
+  // Petit matériel
+  {id:'ART030',nom:'Agrafeuse 26/6 bureau',ref:'AGR-26-6',cat:'Petit materiel',prix:7.99,stock:50},
+  {id:'ART031',nom:'Agrafes 26/6 (boîte 1000)',ref:'AGR-BTE1K',cat:'Petit materiel',prix:1.99,stock:200},
+  {id:'ART032',nom:'Perforatrice 2 trous',ref:'PER-2T',cat:'Petit materiel',prix:8.99,stock:40},
+  {id:'ART033',nom:'Cutter A3 lame 18mm',ref:'CUT-A3',cat:'Petit materiel',prix:4.49,stock:80},
+  {id:'ART034',nom:'Ciseaux 21cm acier inox',ref:'CIS-21',cat:'Petit materiel',prix:5.99,stock:60},
+  {id:'ART035',nom:'Scotch transparent 19mm (lot 3)',ref:'SCO-TRA19',cat:'Petit materiel',prix:3.49,stock:150},
+  {id:'ART036',nom:'Colle en bâton 21g',ref:'COL-BAT21',cat:'Petit materiel',prix:1.29,stock:200},
+  {id:'ART037',nom:'Trombone acier (boîte 100)',ref:'TRO-ACB100',cat:'Petit materiel',prix:1.49,stock:180},
+  {id:'ART038',nom:'Punaises acier (boîte 100)',ref:'PUN-ACB100',cat:'Petit materiel',prix:1.99,stock:120},
+  {id:'ART039',nom:'Règle 30cm plastique',ref:'REG-30P',cat:'Petit materiel',prix:0.99,stock:200},
+  // Consommables
+  {id:'ART040',nom:'Cartouche HP 302 noire',ref:'HP302-NO',cat:'Consommables',prix:14.99,stock:30},
+  {id:'ART041',nom:'Cartouche HP 302 couleurs',ref:'HP302-COL',cat:'Consommables',prix:16.99,stock:25},
+  {id:'ART042',nom:'Toner Brother TN-2420',ref:'TN2420',cat:'Consommables',prix:29.99,stock:20},
+  {id:'ART043',nom:'Ruban correcteur 4.2mm',ref:'RUB-COR42',cat:'Consommables',prix:2.99,stock:100},
+  {id:'ART044',nom:'Piles AA (pack 4)',ref:'PIL-AA4',cat:'Consommables',prix:3.99,stock:80},
+  {id:'ART045',nom:'Piles AAA (pack 4)',ref:'PIL-AAA4',cat:'Consommables',prix:3.49,stock:80},
+  // Tableaux
+  {id:'ART050',nom:'Tableau blanc magnétique 90x60',ref:'TAB-BL9060',cat:'Tableaux',prix:39.99,stock:10},
+  {id:'ART051',nom:'Tableau chevalet papier conférence',ref:'TAB-CHE',cat:'Tableaux',prix:49.99,stock:8},
+  {id:'ART052',nom:'Marqueur effaçable rouge',ref:'MAR-EFF-R',cat:'Tableaux',prix:1.99,stock:60},
+  {id:'ART053',nom:'Marqueur effaçable bleu',ref:'MAR-EFF-B',cat:'Tableaux',prix:1.99,stock:60},
+  {id:'ART054',nom:'Effaceur tableau magnétique',ref:'EFF-MAG',cat:'Tableaux',prix:3.49,stock:40},
+  // Mobilier
+  {id:'ART060',nom:'Chaise de bureau réglable',ref:'CHR-BUR',cat:'Mobilier',prix:149.99,stock:5},
+  {id:'ART061',nom:'Bureau informatique 120cm',ref:'BUR-120',cat:'Mobilier',prix:199.99,stock:3},
+  {id:'ART062',nom:'Étagère métal 5 niveaux',ref:'ETA-MET5',cat:'Mobilier',prix:89.99,stock:6},
+  {id:'ART063',nom:'Caisson bureau 3 tiroirs',ref:'CAI-3T',cat:'Mobilier',prix:129.99,stock:4},
+];
+
+const CLIENTS = ['Entreprise Dupont','Mairie de Lyon','École Pasteur','Cabinet Martin','Société Renard','Atelier Leblanc','Centre Médical Duval','Clinique Saint-Luc','Lycée Jules Ferry','Association Vert Espoir','Hôtel Bristol','Restaurant Le Coin','Pharmacie Centrale','Cabinet Juridique Noir','Agence Immobilière Sud'];
+const RESPONSABLES = ['Alice Martin','Bob Leroy','Claire Dubois','David Moreau','Emma Bernard','François Petit','Gaëlle Simon','Hugo Fournier'];
+const MODES = ['Standard','Express','Urgent'];
+const MOTIFS_RETOUR = ['Article défectueux','Erreur de commande','Surplus de stock','Mauvaise référence','Emballage endommagé','Article non conforme aux specs'];
+const FOURNISSEURS = ['Bureau Plus SAS','Office Depot','Lyreco France','Bruneau Distribution','Staples Pro'];
+
+// ══ Helpers ══
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6).toUpperCase(); }
+function randomEl(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function randomInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function fmtDate(ts){ if(!ts)return'—'; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function genTracking(){ return 'TRK'+Date.now().toString().slice(-8)+Math.random().toString(36).slice(2,5).toUpperCase(); }
+
+// ══ Toast ══
+window.showToast = function(msg, type='info', dur=3500){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  const icons={success:'✅',error:'❌',info:'ℹ️',warn:'⚠️'};
+  t.innerHTML=`<span>${icons[type]||'📢'}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>{ t.style.animation='slideOut .3s ease forwards'; setTimeout(()=>t.remove(),300); },dur);
+};
+
+// ══ Audio ══
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function getAudioCtx(){ if(!audioCtx){ try{ audioCtx=new AudioCtx(); }catch(e){} } return audioCtx; }
+function playBeep(freq=880, dur=0.15, type='sine', vol=0.4){
+  try{
+    const ctx=getAudioCtx(); if(!ctx)return;
+    const osc=ctx.createOscillator(), gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type=type; osc.frequency.value=freq;
+    gain.gain.setValueAtTime(vol,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+function playSuccess(){ playBeep(880,0.12,'sine'); setTimeout(()=>playBeep(1100,0.1,'sine'),120); }
+function playError(){ playBeep(300,0.3,'square',0.3); }
+function playUrgent(){
+  for(let i=0;i<3;i++) setTimeout(()=>{ playBeep(1200,.1,'square',.5); setTimeout(()=>playBeep(800,.1,'square',.5),120); },i*300);
+}
+
+// ══ Tab switching ══
+window.switchTab = function(tab){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('section-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='scan') populateScanSelect();
+  if(tab==='historique') loadHistorique();
+};
+
+// ══ COMMANDES ══
+let allCommandes = [];
+let filterText='', filterStatus='', filterMode='';
+
+function renderCommandes(){
+  const tbody=document.getElementById('tbody-commandes');
+  let list=allCommandes;
+  if(filterText) list=list.filter(c=>(c.ref+c.client+c.responsable).toLowerCase().includes(filterText.toLowerCase()));
+  if(filterStatus) list=list.filter(c=>c.status===filterStatus);
+  if(filterMode) list=list.filter(c=>c.mode===filterMode);
+  list.sort((a,b)=>{
+    const urgScore=v=>v==='Urgent'?0:v==='Express'?1:2;
+    return urgScore(a.mode)-urgScore(b.mode)||(b.createdAt||0)-(a.createdAt||0);
+  });
+  tbody.innerHTML='';
+  if(!list.length){ tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="es-icon">📭</div><p>Aucune commande</p></div></td></tr>`; return; }
+  list.forEach(cmd=>{
+    const modeTag=`<span class="tag ${cmd.mode==='Urgent'?'urgent':cmd.mode==='Express'?'express':'standard'}">${cmd.mode}</span>`;
+    const statusTag=`<span class="status ${cmd.status}">${statusLabel(cmd.status)}</span>`;
+    const pct=cmd.progress||0;
+    const progBar=`<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><small style="color:var(--dim);font-size:.7rem">${pct}%</small>`;
+    const actions=buildCmdActions(cmd);
+    tbody.innerHTML+=`<tr>
+      <td><span class="cmd-ref">${cmd.ref}</span></td>
+      <td>${cmd.client}</td>
+      <td>${cmd.responsable||'—'}</td>
+      <td>${modeTag}</td>
+      <td>${statusTag}</td>
+      <td>${progBar}</td>
+      <td style="font-size:.75rem;color:var(--dim)">${cmd.dateStr||'—'}</td>
+      <td><div class="actions-cell">${actions}</div></td>
+    </tr>`;
+  });
+  updateStats();
+  document.getElementById('cnt-commandes').textContent=allCommandes.length;
+  const urg=allCommandes.filter(c=>c.mode==='Urgent'&&c.status!=='expediee').length;
+  const urgEl=document.getElementById('urgent-alert');
+  if(urg>0){ urgEl.style.display='flex'; urgEl.textContent=`🚨 ${urg} URGENT${urg>1?'S':''}`; }
+  else urgEl.style.display='none';
+  populateScanSelect();
+}
+
+function buildCmdActions(cmd){
+  let html='';
+  html+=`<button class="btn btn-ghost btn-sm" onclick="viewCommande('${cmd.id}')">👁 Détail</button>`;
+  if(cmd.status==='en-attente') html+=`<button class="btn btn-primary btn-sm" onclick="startCommande('${cmd.id}')">▶ Commencer</button>`;
+  if(cmd.status==='en-cours') html+=`<button class="btn btn-success btn-sm" onclick="openValidate('${cmd.id}')">✅ Valider</button>`;
+  if(cmd.status!=='expediee') html+=`<button class="btn btn-ghost btn-sm" onclick="openPrint('${cmd.id}')">🖨️</button>`;
+  return html;
+}
+
+function statusLabel(s){ return {en-attente:'En attente','en-cours':'En cours',expediee:'Expédiée'}[s]||s; }
+
+window.filterCommandes=function(v){ filterText=v; renderCommandes(); };
+window.filterCommandeStatus=function(v){ filterStatus=v; renderCommandes(); };
+window.filterCommandeMode=function(v){ filterMode=v; renderCommandes(); };
+
+window.generateDemoCommandes=async function(){
+  showToast('Génération de 35 commandes…','info');
+  const batch=[];
+  for(let i=0;i<35;i++){
+    const art1=randomEl(ARTICLES), art2=randomEl(ARTICLES), art3=randomEl(ARTICLES.slice(0,20));
+    const mode=randomEl(MODES), now=new Date();
+    const cmd={
+      ref:'CMD-'+uid(),
+      client:randomEl(CLIENTS),
+      responsable:randomEl(RESPONSABLES),
+      mode,
+      status:'en-attente',
+      progress:0,
+      createdAt:now.getTime(),
+      dateStr:now.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+      tracking:genTracking(),
+      articles:[
+        {id:art1.id,nom:art1.nom,ref:art1.ref,qte:randomInt(1,5),scanned:0},
+        {id:art2.id,nom:art2.nom,ref:art2.ref,qte:randomInt(1,3),scanned:0},
+        {id:art3.id,nom:art3.nom,ref:art3.ref,qte:randomInt(1,4),scanned:0},
+      ],
+      adresse:randomEl(CLIENTS)+', 69000 Lyon',
+      commentaire:mode==='Urgent'?'⚠️ COMMANDE URGENTE — Livraison immédiate requise':'',
+      isDemo:true,
+    };
+    batch.push(cmd);
+  }
+  await saveCommandes(batch);
+  loadData();
+  showToast('35 commandes générées !','success');
+};
+
+async function saveCommandes(list){
+  if(useFirebase){
+    const b=writeBatch(db);
+    list.forEach(cmd=>{ const ref=doc(collection(db,'commandes')); cmd.id=ref.id; b.set(ref,cmd); });
+    await b.commit();
+  } else {
+    list.forEach(cmd=>{ if(!cmd.id)cmd.id=uid(); DATA.commandes.push(cmd); });
+    saveLocal('commandes');
+  }
+}
+
+window.purgeCommandes=async function(){
+  if(!confirm('Supprimer toutes les commandes de démo ?'))return;
+  if(useFirebase){
+    const snap=await getDocs(collection(db,'commandes'));
+    const b=writeBatch(db); snap.forEach(d=>{ if(d.data().isDemo)b.delete(d.ref); }); await b.commit();
+  } else { DATA.commandes=DATA.commandes.filter(c=>!c.isDemo); saveLocal('commandes'); }
+  loadData(); showToast('Commandes démo supprimées','warn');
+};
+
+window.startCommande=async function(id){
+  const nom=prompt('Nom de l\'élève responsable ?','');
+  if(!nom)return;
+  await updateCommande(id,{status:'en-cours',responsable:nom});
+  showToast('Commande en cours','info'); loadData();
+};
+
+window.openValidate=function(id){
+  const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
+  const body=document.getElementById('modal-cmd-body');
+  body.innerHTML=`
+    <p style="color:var(--dim);margin-bottom:1rem">Confirmer la validation de la commande ?</p>
+    <div class="feedback-box">
+      <div class="feedback-stat"><span>Référence</span><span class="feedback-val">${cmd.ref}</span></div>
+      <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
+      <div class="feedback-stat"><span>Tracking</span><span class="feedback-val">${cmd.tracking}</span></div>
+      <div class="feedback-stat"><span>Articles</span><span>${cmd.articles.length} lignes</span></div>
+    </div>
+    <p style="color:var(--yellow);font-size:.85rem">⚠️ Cette action est irréversible.</p>`;
+  document.getElementById('modal-cmd-title').textContent='✅ Valider commande '+cmd.ref;
+  const actions=document.getElementById('modal-cmd-actions');
+  actions.innerHTML=`<button class="btn btn-ghost" onclick="closeModal('modal-commande')">Annuler</button>
+    <button class="btn btn-success" onclick="validateCommande('${id}')">✅ Confirmer expédition</button>`;
+  openModal('modal-commande');
+};
+
+window.validateCommande=async function(id){
+  const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
+  const t0=cmd.startedAt||cmd.createdAt||Date.now();
+  const elapsed=Math.round((Date.now()-t0)/1000);
+  await updateCommande(id,{status:'expediee',progress:100,expediedAt:Date.now()});
+  await addHistorique({type:'expedition',ref:cmd.ref,client:cmd.client,tracking:cmd.tracking,icon:'📤',color:'var(--green)',msg:`Commande ${cmd.ref} expédiée — Client: ${cmd.client}`});
+  closeModal('modal-commande');
+  playSuccess();
+  showFeedback(cmd,elapsed);
+  loadData();
+};
+
+function showFeedback(cmd,elapsed){
+  const mins=Math.floor(elapsed/60), secs=elapsed%60;
+  let badges='';
+  if(elapsed<120) badges+=`<span class="badge-award gold">⚡ Rapide</span>`;
+  if(cmd.progress>=100) badges+=`<span class="badge-award green">💯 Complet</span>`;
+  badges+=`<span class="badge-award blue">✅ Expédié</span>`;
+  document.getElementById('modal-feedback-body').innerHTML=`
+    <div class="feedback-box">
+      <div class="feedback-stat"><span>Temps de traitement</span><span class="feedback-val">${mins}m ${secs}s</span></div>
+      <div class="feedback-stat"><span>Articles préparés</span><span class="feedback-val">${cmd.articles.length} lignes</span></div>
+      <div class="feedback-stat"><span>Tracking</span><span class="feedback-val">${cmd.tracking}</span></div>
+    </div>
+    <div style="margin-top:1rem">${badges}</div>`;
+  openModal('modal-feedback');
+}
+
+window.viewCommande=function(id){
+  const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
+  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${a.qte}</td><td>${a.scanned||0}</td></tr>`).join('');
+  document.getElementById('modal-cmd-body').innerHTML=`
+    <div class="feedback-box" style="margin-bottom:1rem">
+      <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
+      <div class="feedback-stat"><span>Mode</span><span>${cmd.mode}</span></div>
+      <div class="feedback-stat"><span>Statut</span><span>${statusLabel(cmd.status)}</span></div>
+      <div class="feedback-stat"><span>Tracking</span><span class="feedback-val">${cmd.tracking}</span></div>
+      <div class="feedback-stat"><span>Adresse</span><span>${cmd.adresse}</span></div>
+      ${cmd.commentaire?`<div class="feedback-stat"><span>Commentaire</span><span style="color:var(--yellow)">${cmd.commentaire}</span></div>`:''}
+    </div>
+    <table class="recap-table"><thead><tr><th>Article</th><th>Réf.</th><th>Qté</th><th>Scanné</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+  document.getElementById('modal-cmd-title').textContent='📦 Commande '+cmd.ref;
+  document.getElementById('modal-cmd-actions').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal('modal-commande')">Fermer</button>
+    <button class="btn btn-ghost btn-sm" onclick="openPrint('${id}')">🖨️ Imprimer</button>
+    ${cmd.status==='en-cours'?`<button class="btn btn-success" onclick="openValidate('${id}')">✅ Valider</button>`:''}`;
+  openModal('modal-commande');
+};
+
+window.openPrint=function(id){
+  const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
+  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${a.qte}</td></tr>`).join('');
+  document.getElementById('print-content').innerHTML=`
+    <div style="font-family:monospace;font-size:.85rem;background:#fff;color:#000;padding:1rem;border-radius:8px">
+      <h2 style="text-align:center;border-bottom:2px solid #000;padding-bottom:.5rem">FICHE D'EXPÉDITION</h2>
+      <p><strong>Référence :</strong> ${cmd.ref}</p>
+      <p><strong>Tracking :</strong> ${cmd.tracking}</p>
+      <p><strong>Client :</strong> ${cmd.client}</p>
+      <p><strong>Adresse :</strong> ${cmd.adresse||'—'}</p>
+      <p><strong>Mode :</strong> ${cmd.mode}</p>
+      <p><strong>Date :</strong> ${cmd.dateStr}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:1rem">
+        <tr style="border-bottom:1px solid #000"><th>Article</th><th>Réf.</th><th>Qté</th></tr>
+        ${rows}
+      </table>
+      <div style="margin-top:1rem;border:1px dashed #999;padding:.5rem;text-align:center">
+        <strong>CODE TRACKING : ${cmd.tracking}</strong>
+      </div>
+    </div>`;
+  openModal('modal-print');
+};
+
+function updateStats(){
+  const total=allCommandes.length;
+  const attente=allCommandes.filter(c=>c.status==='en-attente').length;
+  const encours=allCommandes.filter(c=>c.status==='en-cours').length;
+  const exp=allCommandes.filter(c=>c.status==='expediee').length;
+  const urg=allCommandes.filter(c=>c.mode==='Urgent').length;
+  document.getElementById('stats-commandes').innerHTML=`
+    <div class="stat-card c-blue"><div class="stat-val">${total}</div><div class="stat-label">Total commandes</div></div>
+    <div class="stat-card c-yellow"><div class="stat-val">${attente}</div><div class="stat-label">En attente</div></div>
+    <div class="stat-card c-blue"><div class="stat-val">${encours}</div><div class="stat-label">En cours</div></div>
+    <div class="stat-card c-green"><div class="stat-val">${exp}</div><div class="stat-label">Expédiées</div></div>
+    <div class="stat-card c-red"><div class="stat-val">${urg}</div><div class="stat-label">Urgentes</div></div>`;
+}
+
+async function updateCommande(id,data){
+  if(useFirebase){ await updateDoc(doc(db,'commandes',id),data); }
+  else { const c=DATA.commandes.find(c=>c.id===id); if(c){ Object.assign(c,data); saveLocal('commandes'); } }
+}
+
+// ══ RETOURS ══
+let allRetours=[];
+window.generateDemoRetours=async function(){
+  showToast('Génération de 10 retours…','info');
+  const list=[];
+  for(let i=0;i<10;i++){
+    const art=randomEl(ARTICLES);
+    list.push({
+      id:uid(), ref:'RET-'+uid(),
+      article:art.nom, refArt:art.ref, qte:randomInt(1,5),
+      motif:randomEl(MOTIFS_RETOUR),
+      status:Math.random()>.4?'conforme':'non-conforme',
+      createdAt:Date.now()-randomInt(0,86400000),
+      isDemo:true,
+    });
+  }
+  if(useFirebase){
+    const b=writeBatch(db);
+    list.forEach(r=>{ const ref=doc(collection(db,'retours')); r.id=ref.id; b.set(ref,r); });
+    await b.commit();
+  } else { list.forEach(r=>DATA.retours.push(r)); saveLocal('retours'); }
+  loadData(); showToast('10 retours générés','success');
+};
+
+function renderRetours(){
+  const tbody=document.getElementById('tbody-retours');
+  tbody.innerHTML='';
+  document.getElementById('cnt-retours').textContent=allRetours.length;
+  if(!allRetours.length){ tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="es-icon">↩️</div><p>Aucun retour</p></div></td></tr>`; return; }
+  allRetours.forEach(r=>{
+    const statusTag=`<span class="status ${r.status}">${r.status==='conforme'?'Conforme':r.status==='non-conforme'?'Non conforme':r.status==='quarantaine'?'Quarantaine':'Résolu'}</span>`;
+    let actions='';
+    if(r.status==='conforme') actions=`<button class="btn btn-success btn-sm" onclick="cloturerRetour('${r.id}')">✅ Clôturer</button>`;
+    else if(r.status==='non-conforme') actions=`
+      <button class="btn btn-warn btn-sm" onclick="actionRetour('${r.id}','quarantaine')">🔒 Quarantaine</button>
+      <button class="btn btn-ghost btn-sm" onclick="actionRetour('${r.id}','fournisseur')">📤 Fournisseur</button>
+      <button class="btn btn-ghost btn-sm" onclick="actionRetour('${r.id}','stock')">📦 Stock</button>
+      <button class="btn btn-danger btn-sm" onclick="openLitige('${r.id}')">⚠️ Litige</button>`;
+    else actions=`<span style="color:var(--green);font-size:.8rem">✅ Traité</span>`;
+    tbody.innerHTML+=`<tr>
+      <td><span class="cmd-ref">${r.ref}</span></td>
+      <td>${r.article}</td><td>${r.qte}</td>
+      <td style="font-size:.78rem;color:var(--dim)">${r.motif}</td>
+      <td>${statusTag}</td>
+      <td><div class="actions-cell">${actions}</div></td>
+    </tr>`;
+  });
+}
+
+window.cloturerRetour=async function(id){
+  await updateRetour(id,{status:'resolue'});
+  await addHistorique({type:'retour',ref:id,icon:'↩️',color:'var(--green)',msg:`Retour clôturé (conforme)`});
+  showToast('Retour clôturé','success'); loadData();
+};
+window.actionRetour=async function(id,action){
+  const labels={quarantaine:'Mis en quarantaine',fournisseur:'Retourné au fournisseur',stock:'Remis en stock'};
+  await updateRetour(id,{status:action==='quarantaine'?'quarantaine':'resolue',action});
+  await addHistorique({type:'retour',ref:id,icon:'↩️',color:'var(--yellow)',msg:`Retour — ${labels[action]}`});
+  showToast(labels[action],'warn'); loadData();
+};
+
+let currentLittigeId='';
+window.openLitige=function(id){ currentLittigeId=id; openModal('modal-litige'); };
+window.submitLitige=async function(){
+  const type=document.getElementById('litige-type').value;
+  const desc=document.getElementById('litige-desc').value;
+  const gravity=document.getElementById('litige-gravity').value;
+  await updateRetour(currentLittigeId,{status:'resolue',litige:{type,desc,gravity,createdAt:Date.now()}});
+  await addHistorique({type:'litige',ref:currentLittigeId,icon:'⚠️',color:'var(--red)',msg:`Litige signalé: ${type} (${gravity})`});
+  closeModal('modal-litige'); showToast('Litige enregistré','error'); loadData();
+};
+
+async function updateRetour(id,data){
+  if(useFirebase) await updateDoc(doc(db,'retours',id),data);
+  else { const r=DATA.retours.find(r=>r.id===id); if(r){ Object.assign(r,data); saveLocal('retours'); } }
+}
+
+// ══ RECEPTIONS ══
+let allReceptions=[];
+window.generateDemoReceptions=async function(){
+  showToast('Génération de 10 réceptions…','info');
+  const list=[];
+  for(let i=0;i<10;i++){
+    const art=randomEl(ARTICLES), art2=randomEl(ARTICLES);
+    list.push({
+      id:uid(), ref:'REC-'+uid(),
+      fournisseur:randomEl(FOURNISSEURS),
+      articles:`${art.nom}, ${art2.nom}`,
+      qteAttendue:randomInt(10,100),
+      status:Math.random()>.35?'conforme':'non-conforme',
+      createdAt:Date.now()-randomInt(0,43200000),
+      isDemo:true,
+    });
+  }
+  if(useFirebase){
+    const b=writeBatch(db);
+    list.forEach(r=>{ const ref=doc(collection(db,'receptions')); r.id=ref.id; b.set(ref,r); });
+    await b.commit();
+  } else { list.forEach(r=>DATA.receptions.push(r)); saveLocal('receptions'); }
+  loadData(); showToast('10 réceptions générées','success');
+};
+
+function renderReceptions(){
+  const tbody=document.getElementById('tbody-receptions');
+  tbody.innerHTML=''; document.getElementById('cnt-reception').textContent=allReceptions.length;
+  if(!allReceptions.length){ tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="es-icon">🚚</div><p>Aucune réception</p></div></td></tr>`; return; }
+  allReceptions.forEach(r=>{
+    const statusTag=`<span class="status ${r.status}">${r.status==='conforme'?'Conforme':r.status==='non-conforme'?'Non conforme':r.status}</span>`;
+    let actions='';
+    if(r.status==='conforme') actions=`<button class="btn btn-success btn-sm" onclick="validerReception('${r.id}')">✅ Valider entrée stock</button>`;
+    else if(r.status==='non-conforme') actions=`
+      <button class="btn btn-danger btn-sm" onclick="actionReception('${r.id}','refuse')">🚫 Refuser</button>
+      <button class="btn btn-warn btn-sm" onclick="actionReception('${r.id}','reserve')">📋 Avec réserve</button>
+      <button class="btn btn-ghost btn-sm" onclick="actionReception('${r.id}','attente')">⏳ Attente</button>
+      <button class="btn btn-ghost btn-sm" onclick="actionReception('${r.id}','contact')">📞 Contacter</button>`;
+    else actions=`<span style="color:var(--green);font-size:.8rem">✅ Traité</span>`;
+    tbody.innerHTML+=`<tr>
+      <td><span class="cmd-ref">${r.ref}</span></td>
+      <td>${r.fournisseur}</td><td style="font-size:.78rem">${r.articles}</td>
+      <td>${r.qteAttendue}</td><td>${statusTag}</td>
+      <td><div class="actions-cell">${actions}</div></td>
+    </tr>`;
+  });
+}
+
+window.validerReception=async function(id){
+  if(!confirm('Confirmer l\'entrée en stock ?'))return;
+  await updateReception(id,{status:'resolue',validatedAt:Date.now()});
+  await addHistorique({type:'reception',ref:id,icon:'🚚',color:'var(--green)',msg:`Réception validée — Entrée en stock`});
+  showToast('Réception validée, stock mis à jour','success'); loadData();
+};
+window.actionReception=async function(id,action){
+  const labels={refuse:'Livraison refusée',reserve:'Accepté avec réserve',attente:'Mis en attente',contact:'Fournisseur contacté'};
+  await updateReception(id,{status:'resolue',action});
+  await addHistorique({type:'reception',ref:id,icon:'🚚',color:'var(--yellow)',msg:`Réception — ${labels[action]}`});
+  showToast(labels[action],'warn'); loadData();
+};
+async function updateReception(id,data){
+  if(useFirebase) await updateDoc(doc(db,'receptions',id),data);
+  else { const r=DATA.receptions.find(r=>r.id===id); if(r){ Object.assign(r,data); saveLocal('receptions'); } }
+}
+
+// ══ HISTORIQUE ══
+let allHistorique=[];
+async function addHistorique(entry){
+  const h={...entry,createdAt:Date.now()};
+  if(useFirebase) await addDoc(collection(db,'historique'),h);
+  else { h.id=uid(); DATA.historique.unshift(h); if(DATA.historique.length>500)DATA.historique.pop(); saveLocal('historique'); }
+}
+
+window.loadHistorique=async function(){
+  if(useFirebase){
+    try{
+      const snap=await getDocs(query(collection(db,'historique'),orderBy('createdAt','desc')));
+      allHistorique=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){ allHistorique=DATA.historique; }
+  } else allHistorique=DATA.historique;
+  renderHistorique(allHistorique);
+};
+window.filterHistorique=function(v){
+  renderHistorique(allHistorique.filter(h=>(h.msg||'').toLowerCase().includes(v.toLowerCase())));
+};
+function renderHistorique(list){
+  const el=document.getElementById('hist-list');
+  if(!list.length){ el.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><p>Historique vide</p></div>'; return; }
+  el.innerHTML=list.slice(0,200).map(h=>{
+    const d=new Date(h.createdAt||Date.now());
+    const timeStr=d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div class="hist-entry">
+      <div class="hist-icon" style="background:${h.color||'var(--border)'}22;color:${h.color||'var(--text)'}">${h.icon||'📌'}</div>
+      <div class="hist-content">
+        <div class="hist-title">${h.msg||'—'}</div>
+        ${h.ref?`<div class="hist-detail">Réf: ${h.ref}</div>`:''}
+      </div>
+      <div class="hist-time">${timeStr}</div>
+    </div>`;
+  }).join('');
+}
+window.clearHistorique=async function(){
+  if(!confirm('Effacer tout l\'historique ?'))return;
+  if(useFirebase){
+    const snap=await getDocs(collection(db,'historique'));
+    const b=writeBatch(db); snap.forEach(d=>b.delete(d.ref)); await b.commit();
+  } else { DATA.historique=[]; saveLocal('historique'); }
+  allHistorique=[]; renderHistorique([]); showToast('Historique effacé','warn');
+};
+
+// ══ SCENARIOS ══
+window.loadScenario=async function(level){
+  if(!confirm(`Charger le scénario "${level}" ? Les données de démo existantes seront remplacées.`))return;
+  showToast('Chargement du scénario…','info');
+  document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('loaded'));
+  document.getElementById('card-'+level).classList.add('loaded');
+  localStorage.setItem('wms_active_scenario',level);
+
+  const configs={
+    easy:{cmds:10,receps:3,rets:3,ncRatio:0},
+    medium:{cmds:20,receps:5,rets:5,ncRatio:.2},
+    advanced:{cmds:28,receps:8,rets:8,ncRatio:.5},
+    expert:{cmds:35,receps:10,rets:10,ncRatio:.7},
+  };
+  const cfg=configs[level];
+
+  // Purge démo existante
+  if(useFirebase){
+    const purge=async(colName)=>{
+      const snap=await getDocs(collection(db,colName));
+      const b=writeBatch(db); snap.forEach(d=>{ if(d.data().isDemo)b.delete(d.ref); }); await b.commit();
+    };
+    await purge('commandes'); await purge('retours'); await purge('receptions');
+  } else {
+    DATA.commandes=DATA.commandes.filter(c=>!c.isDemo);
+    DATA.retours=DATA.retours.filter(c=>!c.isDemo);
+    DATA.receptions=DATA.receptions.filter(c=>!c.isDemo);
+  }
+
+  // Générer
+  const cmdList=[], retList=[], recList=[];
+  for(let i=0;i<cfg.cmds;i++){
+    const arts=[randomEl(ARTICLES),randomEl(ARTICLES),randomEl(ARTICLES)];
+    const mode=level==='expert'&&i<5?'Urgent':level==='advanced'&&i<3?'Urgent':randomEl(MODES);
+    cmdList.push({
+      ref:'CMD-'+uid(),client:randomEl(CLIENTS),responsable:'',mode,
+      status:'en-attente',progress:0,createdAt:Date.now()-randomInt(0,86400000*2),
+      dateStr:new Date(Date.now()-randomInt(0,3600000*8)).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+      tracking:genTracking(),
+      articles:arts.map(a=>({id:a.id,nom:a.nom,ref:a.ref,qte:randomInt(1,5),scanned:0})),
+      adresse:randomEl(CLIENTS)+', France',
+      commentaire:level==='advanced'&&Math.random()>.6?'⚠️ Adresse à vérifier':'',
+      isDemo:true,
+    });
+  }
+  for(let i=0;i<cfg.rets;i++){
+    const art=randomEl(ARTICLES);
+    retList.push({
+      id:uid(),ref:'RET-'+uid(),article:art.nom,refArt:art.ref,
+      qte:randomInt(1,5),motif:randomEl(MOTIFS_RETOUR),
+      status:Math.random()>cfg.ncRatio?'conforme':'non-conforme',
+      createdAt:Date.now()-randomInt(0,43200000),isDemo:true,
+    });
+  }
+  for(let i=0;i<cfg.receps;i++){
+    const art=randomEl(ARTICLES), art2=randomEl(ARTICLES);
+    recList.push({
+      id:uid(),ref:'REC-'+uid(),fournisseur:randomEl(FOURNISSEURS),
+      articles:`${art.nom}, ${art2.nom}`,qteAttendue:randomInt(10,100),
+      status:Math.random()>cfg.ncRatio?'conforme':'non-conforme',
+      createdAt:Date.now()-randomInt(0,21600000),isDemo:true,
+    });
+  }
+
+  await saveCommandes(cmdList);
+  if(useFirebase){
+    const bR=writeBatch(db); retList.forEach(r=>{ const ref=doc(collection(db,'retours')); r.id=ref.id; bR.set(ref,r); }); await bR.commit();
+    const bRec=writeBatch(db); recList.forEach(r=>{ const ref=doc(collection(db,'receptions')); r.id=ref.id; bRec.set(ref,r); }); await bRec.commit();
+  } else {
+    retList.forEach(r=>DATA.retours.push(r)); saveLocal('retours');
+    recList.forEach(r=>DATA.receptions.push(r)); saveLocal('receptions');
+  }
+  await addHistorique({type:'scenario',icon:'🎮',color:'var(--purple)',msg:`Scénario "${level}" chargé — ${cfg.cmds} cmds, ${cfg.rets} retours, ${cfg.receps} réceptions`});
+  loadData(); showToast(`Scénario ${level} chargé !`,'success');
+  switchTab('commandes');
+};
+
+window.resetScenarios=async function(){
+  if(!confirm('Réinitialiser tous les scénarios et données démo ?'))return;
+  localStorage.removeItem('wms_active_scenario');
+  document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('loaded'));
+  if(useFirebase){
+    const purge=async(col)=>{ const s=await getDocs(collection(db,col)); const b=writeBatch(db); s.forEach(d=>{ if(d.data().isDemo)b.delete(d.ref); }); await b.commit(); };
+    await purge('commandes'); await purge('retours'); await purge('receptions');
+  } else {
+    ['commandes','retours','receptions'].forEach(k=>{ DATA[k]=DATA[k].filter(c=>!c.isDemo); saveLocal(k); });
+  }
+  loadData(); showToast('Scénarios réinitialisés','warn');
+};
+
+window.showProgress=function(){
+  showToast('Fonctionnalité suivi élèves — à connecter au module formation','info');
+};
+
+window.switchTab = switchTab;
+window.filterCommandes = filterCommandes;
+window.filterCommandeStatus = filterCommandeStatus;
+window.filterCommandeMode = filterCommandeMode;
+window.generateDemoCommandes = generateDemoCommandes;
+window.purgeCommandes = purgeCommandes;
+window.generateDemoRetours = generateDemoRetours;
+window.generateDemoReceptions = generateDemoReceptions;
+window.viewCommande = viewCommande;
+window.openValidate = openValidate;
+
+// ══ SCAN / Camera ══
+let cameraStream=null, scanOrderData=null, scanSimInterval=null;
+
+window.startCamera=async function(){
+  try{
+    if(cameraStream)return;
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    const video=document.getElementById('camera-video');
+    video.srcObject=cameraStream;
+    document.getElementById('cam-indicator').className='cam-indicator waiting';
+    document.getElementById('cam-indicator').textContent='🔍 Prêt à scanner';
+    showToast('Caméra démarrée','success');
+  }catch(e){
+    showToast('Impossible d\'accéder à la caméra: '+e.message,'error');
+    document.getElementById('cam-indicator').textContent='❌ Caméra indisponible';
+  }
+};
+
+window.stopCamera=function(){
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
+  document.getElementById('camera-video').srcObject=null;
+  document.getElementById('cam-indicator').className='cam-indicator waiting';
+  document.getElementById('cam-indicator').textContent='⏳ En attente';
+};
+
+function flashCam(type){
+  const fg=document.getElementById('flash-green'), fr=document.getElementById('flash-red');
+  const el=type==='green'?fg:fr;
+  el.style.opacity='.6';
+  setTimeout(()=>el.style.opacity='0',600);
+}
+
+function updateCamIndicator(status,msg){
+  const el=document.getElementById('cam-indicator');
+  el.className='cam-indicator '+status;
+  el.textContent=msg;
+  if(status!=='success')return;
+  setTimeout(()=>{ el.className='cam-indicator waiting'; el.textContent='🔍 Prêt à scanner'; },1000);
+}
+
+window.simulateScan=function(){
+  if(!scanOrderData){ showToast('Sélectionnez une commande d\'abord','warn'); return; }
+  const pending=scanOrderData.articles.filter(a=>a.scanned<a.qte);
+  if(!pending.length){ showToast('Tous les articles sont déjà scannés !','info'); return; }
+  const art=pending[Math.floor(Math.random()*pending.length)];
+  art.scanned=(art.scanned||0)+1;
+  flashCam('green'); playSuccess();
+  updateCamIndicator('success',`✅ Article scanné`);
+  document.getElementById('scan-msg').textContent=`✅ Article scanné: ${art.nom}`;
+  document.getElementById('scan-msg').className='scan-msg ok';
+  updateScanProgress();
+  saveScanProgress();
+};
+
+function populateScanSelect(){
+  const sel=document.getElementById('scan-order-select');
+  const pendingCmds=allCommandes.filter(c=>c.status==='en-cours'||c.status==='en-attente');
+  sel.innerHTML='<option value="">— Choisir une commande —</option>';
+  pendingCmds.forEach(c=>{ sel.innerHTML+=`<option value="${c.id}">${c.ref} — ${c.client} (${c.mode})</option>`; });
+}
+
+window.loadScanOrder=function(){
+  const id=document.getElementById('scan-order-select').value;
+  if(!id){ scanOrderData=null; document.getElementById('scan-order-info').innerHTML='<div class="empty-state"><div class="es-icon">📦</div><p>Sélectionnez une commande</p></div>'; document.getElementById('scan-progress-wrap').style.display='none'; document.getElementById('scan-items-list').innerHTML=''; return; }
+  const cmd=allCommandes.find(c=>c.id===id);
+  if(!cmd)return;
+  scanOrderData=JSON.parse(JSON.stringify(cmd));// deep copy
+  document.getElementById('scan-order-info').innerHTML=`
+    <div class="feedback-box" style="margin-bottom:.75rem">
+      <div class="feedback-stat"><span>Ref</span><span class="feedback-val">${cmd.ref}</span></div>
+      <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
+      <div class="feedback-stat"><span>Mode</span><span>${cmd.mode}</span></div>
+    </div>`;
+  document.getElementById('scan-progress-wrap').style.display='block';
+  updateScanProgress();
+};
+
+function updateScanProgress(){
+  if(!scanOrderData)return;
+  const arts=scanOrderData.articles;
+  const totalQte=arts.reduce((s,a)=>s+a.qte,0);
+  const scannedQte=arts.reduce((s,a)=>s+(a.scanned||0),0);
+  const pct=totalQte>0?Math.round(scannedQte/totalQte*100):0;
+  document.getElementById('scan-pct').textContent=pct+'%';
+  document.getElementById('scan-progress-fill').style.width=pct+'%';
+  const list=document.getElementById('scan-items-list');
+  list.innerHTML=arts.map(a=>{
+    const done=(a.scanned||0)>=a.qte;
+    const partial=(a.scanned||0)>0&&!done;
+    return `<div class="scan-item-row ${done?'done':partial?'partial':'pending'}">
+      <span style="font-size:.8rem">${done?'✅':partial?'🔶':'⬜'} ${a.nom}</span>
+      <span style="font-family:var(--font-mono);font-size:.8rem">${a.scanned||0}/${a.qte}</span>
+    </div>`;
+  }).join('');
+  const btn=document.getElementById('btn-validate-scan');
+  if(pct>=100){
+    btn.style.display='inline-flex';
+    document.getElementById('scan-msg').textContent='🎉 Commande complète !';
+    document.getElementById('scan-msg').className='scan-msg ok';
+    playSuccess();
+  } else btn.style.display='none';
+}
+
+async function saveScanProgress(){
+  if(!scanOrderData)return;
+  const arts=scanOrderData.articles;
+  const totalQte=arts.reduce((s,a)=>s+a.qte,0);
+  const scannedQte=arts.reduce((s,a)=>s+(a.scanned||0),0);
+  const pct=Math.round(scannedQte/totalQte*100);
+  await updateCommande(scanOrderData.id,{articles:arts,progress:pct,status:'en-cours',startedAt:scanOrderData.startedAt||Date.now()});
+  // update local
+  const c=allCommandes.find(c=>c.id===scanOrderData.id);
+  if(c){ c.articles=arts; c.progress=pct; c.status='en-cours'; }
+  renderCommandes();
+}
+
+window.validateScanOrder=async function(){
+  if(!scanOrderData)return;
+  if(!confirm('Valider définitivement cette commande ?'))return;
+  await validateCommande(scanOrderData.id);
+  scanOrderData=null;
+  document.getElementById('scan-order-select').value='';
+  loadScanOrder();
+};
+
+// ══ Données ══
+async function loadData(){
+  if(useFirebase){
+    try{
+      const [cSnap,rSnap,recSnap]=await Promise.all([
+        getDocs(collection(db,'commandes')),
+        getDocs(collection(db,'retours')),
+        getDocs(collection(db,'receptions')),
+      ]);
+      allCommandes=cSnap.docs.map(d=>({id:d.id,...d.data()}));
+      allRetours=rSnap.docs.map(d=>({id:d.id,...d.data()}));
+      allReceptions=recSnap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){
+      console.warn('Firebase read error:',e);
+      allCommandes=DATA.commandes; allRetours=DATA.retours; allReceptions=DATA.receptions;
+    }
+  } else {
+    allCommandes=DATA.commandes; allRetours=DATA.retours; allReceptions=DATA.receptions;
+  }
+  renderCommandes(); renderRetours(); renderReceptions();
+  checkUrgentNotif();
+}
+
+let knownUrgentIds=new Set();
+function checkUrgentNotif(){
+  const newUrg=allCommandes.filter(c=>c.mode==='Urgent'&&c.status!=='expediee');
+  newUrg.forEach(c=>{
+    if(!knownUrgentIds.has(c.id)){
+      knownUrgentIds.add(c.id);
+      if(knownUrgentIds.size>1){ playUrgent(); showToast(`🚨 Nouvelle commande urgente: ${c.ref}`,'error',5000); }
+    }
+  });
+}
+
+// ══ Firebase realtime listener ══
+function setupListeners(){
+  if(!useFirebase)return;
+  try{
+    onSnapshot(collection(db,'commandes'),()=>loadData());
+  }catch(e){}
+}
+
+// ══ Modal helpers ══
+window.openModal=function(id){ document.getElementById(id).classList.add('open'); };
+window.closeModal=function(id){ document.getElementById(id).classList.remove('open'); };
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){ if(e.target===this)closeModal(this.id); }));
+
+// ══ Restore scenario state ══
+function restoreScenarioState(){
+  const s=localStorage.getItem('wms_active_scenario');
+  if(s) document.getElementById('card-'+s)?.classList.add('loaded');
+}
+
+// ══ INIT ══
+(async function init(){
+  restoreScenarioState();
+  await loadData();
+  await loadHistorique();
+  setupListeners();
+  // Auto-poll si pas Firebase
+  if(!useFirebase) setInterval(loadData, 10000);
+  // Check urgent messages from demande.html
+  setInterval(()=>{
+    const m=localStorage.getItem('wms_urgent_ping');
+    if(m){ localStorage.removeItem('wms_urgent_ping'); playUrgent(); showToast('🚨 Nouvelle commande urgente reçue !','error',6000); loadData(); }
+  },2000);
+})();
+</script>
+
+<style>
+@media print{
+  .header,.nav,.toolbar,.modal-overlay .modal .modal-actions,.modal-overlay .modal .modal-close{display:none!important;}
+  body{background:#fff;color:#000;}
+  #print-content div{border-radius:0;}
+}
+</style>
 </body>
 </html>
