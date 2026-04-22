@@ -527,12 +527,12 @@ import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, o
 // ══ Firebase config ══
 // IMPORTANT: Remplacez par votre propre config Firebase !
 const firebaseConfig = {
-  apiKey: "VOTRE_API_KEY",
-  authDomain: "VOTRE_PROJECT.firebaseapp.com",
-  projectId: "VOTRE_PROJECT_ID",
-  storageBucket: "VOTRE_PROJECT.appspot.com",
-  messagingSenderId: "VOTRE_SENDER_ID",
-  appId: "VOTRE_APP_ID"
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
 };
 
 let db, useFirebase = false;
@@ -1174,6 +1174,17 @@ window.resetScenarios=async function(){
 window.showProgress=function(){
   showToast('Fonctionnalité suivi élèves — à connecter au module formation','info');
 };
+
+window.switchTab = switchTab;
+window.filterCommandes = filterCommandes;
+window.filterCommandeStatus = filterCommandeStatus;
+window.filterCommandeMode = filterCommandeMode;
+window.generateDemoCommandes = generateDemoCommandes;
+window.purgeCommandes = purgeCommandes;
+window.generateDemoRetours = generateDemoRetours;
+window.generateDemoReceptions = generateDemoReceptions;
+window.viewCommande = viewCommande;
+window.openValidate = openValidate;
 
 // ══ SCAN / Camera ══
 let cameraStream=null, scanOrderData=null, scanSimInterval=null;
