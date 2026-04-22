@@ -718,7 +718,7 @@ function buildCmdActions(cmd){
   return html;
 }
 
-function statusLabel(s){ return {en-attente:'En attente','en-cours':'En cours',expediee:'Expédiée'}[s]||s; }
+function statusLabel(s){ return {'en-attente':'En attente','en-cours':'En cours',expediee:'Expédiée'}[s]||s; }
 
 window.filterCommandes=function(v){ filterText=v; renderCommandes(); };
 window.filterCommandeStatus=function(v){ filterStatus=v; renderCommandes(); };
