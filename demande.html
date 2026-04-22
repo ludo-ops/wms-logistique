@@ -1,347 +1,663 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <title>WMS — Passer une commande</title>
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import {
-      getFirestore, collection, doc, addDoc, setDoc, onSnapshot
-    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
-      authDomain: "wms-logistique.firebaseapp.com",
-      projectId: "wms-logistique",
-      storageBucket: "wms-logistique.firebasestorage.app",
-      messagingSenderId: "34951077064",
-      appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    let articles = [];
-    let cart = {};
-
-    const $ = (id) => document.getElementById(id);
-
-    const ICONS = {
-      Fournitures: "🖊️", Emballage: "📦", EPI: "🦺", Matériaux: "🧱", Divers: "📋"
-    };
-
-    function tracking() {
-      return "TRK-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-    }
-
-    function formatDate(d) {
-      return new Date(d).toLocaleString("fr-BE");
-    }
-
-    function showStep(n) {
-      [1, 2, 3].forEach(i => {
-        const page = $("page-" + i);
-        if (page) page.classList.toggle("active", i === n);
-        const stepEl = $("step-" + i);
-        if (stepEl) {
-          stepEl.classList.toggle("active", i === n);
-          stepEl.classList.toggle("done", i < n);
-        }
-      });
-    }
-
-    function cartCount() {
-      return Object.values(cart).reduce((s, v) => s + v, 0);
-    }
-
-    function updateCartBadge() {
-      const count = cartCount();
-      $("cart-count").textContent = count;
-      $("cart-badge").style.display = count > 0 ? "flex" : "none";
-    }
-
-    function renderArticles() {
-      const q = $("article-search").value.toLowerCase().trim();
-      const list = $("article-list");
-      const filtered = articles.filter(a =>
-        a.qty > 0 && (!q || a.name.toLowerCase().includes(q) || a.sku.toLowerCase().includes(q))
-      );
-      if (!filtered.length) {
-        list.innerHTML = "<div class=\"empty\">Aucun article disponible</div>";
-        return;
-      }
-      list.innerHTML = filtered.sort((a, b) => a.name.localeCompare(b.name)).map(a => {
-        const inCart = cart[a.sku] || 0;
-        const icon = ICONS[a.category] || "📋";
-        return `
-          <div class="art-card">
-            <div class="art-icon">${icon}</div>
-            <div class="art-info">
-              <div class="art-name">${a.name}</div>
-              <div class="art-meta">${a.category} · Stock : ${a.qty}</div>
-            </div>
-            <div class="art-actions">
-              ${inCart > 0 ? `
-                <button class="qty-btn" onclick="window.removeFromCart('${a.sku}')">−</button>
-                <span class="qty-val">${inCart}</span>
-              ` : ""}
-              <button class="add-btn ${inCart > 0 ? "green" : "blue"}" onclick="window.addToCart('${a.sku}')">
-                ${inCart > 0 ? "+" : "Ajouter"}
-              </button>
-            </div>
-          </div>
-        `;
-      }).join("");
-    }
-
-    function renderCartSummary() {
-      const items = Object.entries(cart).filter(([, q]) => q > 0).map(([sku, qty]) => {
-        const a = articles.find(x => x.sku === sku);
-        return a ? { ...a, ordered: qty } : null;
-      }).filter(Boolean);
-      const container = $("cart-summary");
-      if (!items.length) {
-        container.innerHTML = "<div class=\"empty\">Votre panier est vide.</div>";
-        return;
-      }
-      container.innerHTML = items.map(i => `
-        <div class="summary-row">
-          <span><strong>${i.name}</strong><br><small>${i.sku}</small></span>
-          <span class="qty-tag">x${i.ordered}</span>
-        </div>
-      `).join("");
-    }
-
-    window.addToCart = function(sku) {
-      const a = articles.find(x => x.sku === sku);
-      if (!a) return;
-      const current = cart[sku] || 0;
-      if (current >= a.qty) return toast("Stock insuffisant", "err");
-      cart[sku] = current + 1;
-      updateCartBadge();
-      renderArticles();
-    };
-
-    window.removeFromCart = function(sku) {
-      if (!cart[sku]) return;
-      cart[sku] = Math.max(0, cart[sku] - 1);
-      if (cart[sku] === 0) delete cart[sku];
-      updateCartBadge();
-      renderArticles();
-    };
-
-    function goToInfo() {
-      if (cartCount() === 0) return toast("Ajoutez au moins un article", "err");
-      renderCartSummary();
-      showStep(2);
-    }
-
-    function backToChoix() {
-      showStep(1);
-    }
-
-    async function sendOrder() {
-      const prenom = $("info-prenom").value.trim();
-      const nom = $("info-nom").value.trim();
-      const adresse = $("info-adresse").value.trim();
-      const ville = $("info-ville").value.trim();
-      const mode = $("info-mode").value;
-      if (!prenom || !nom || !adresse || !ville) return toast("Remplis tous les champs", "err");
-
-      const items = Object.entries(cart).filter(([, q]) => q > 0).map(([sku, qty]) => {
-        const a = articles.find(x => x.sku === sku);
-        return { sku, name: a?.name || sku, qty, scanned: 0, location: a?.location || "", price: a?.price || 0 };
-      });
-
-      const trk = tracking();
-      const orderId = "EMP-" + Date.now();
-      const now = new Date().toISOString();
-
-      await setDoc(doc(db, "orders", orderId), {
-        id: orderId,
-        client: `${prenom} ${nom}`,
-        tracking: trk,
-        status: "pending",
-        urgent: mode === "Express",
-        isReal: true,
-        isTrap: false,
-        assignedTo: "",
-        shippingMode: mode,
-        flowStep: "Réception",
-        issueCase: "Aucun",
-        date: now,
-        source: "employee",
-        address: `${adresse}, ${ville}`,
-        items
-      });
-
-      // Affiche le récap
-      $("recap-tracking").textContent = trk;
-      $("recap-date").textContent = formatDate(now);
-      $("recap-mode").textContent = mode;
-      $("recap-client").textContent = `${prenom} ${nom}`;
-      $("recap-adresse").textContent = `${adresse}, ${ville}`;
-      $("recap-items").innerHTML = items.map(i => `
-        <div class="summary-row"><span>${i.name}</span><span class="qty-tag">x${i.qty}</span></div>
-      `).join("");
-
-      showStep(3);
-      toast("Commande envoyée !");
-    }
-
-    function resetApp() {
-      cart = {};
-      updateCartBadge();
-      ["info-prenom","info-nom","info-adresse","info-ville"].forEach(id => $(id).value = "");
-      $("info-mode").value = "Standard";
-      $("article-search").value = "";
-      renderArticles();
-      showStep(1);
-    }
-
-    function toast(msg, type = "ok") {
-      const el = $("toast");
-      el.textContent = msg;
-      el.className = "toast show " + type;
-      clearTimeout(window._toast);
-      window._toast = setTimeout(() => el.className = "toast", 3000);
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      $("btn-to-info").addEventListener("click", goToInfo);
-      $("btn-back-choix").addEventListener("click", backToChoix);
-      $("btn-send").addEventListener("click", sendOrder);
-      $("btn-reset").addEventListener("click", resetApp);
-      $("article-search").addEventListener("input", renderArticles);
-
-      onSnapshot(collection(db, "articles"), snap => {
-        articles = snap.docs.map(d => d.data());
-        renderArticles();
-      });
-    });
-  </script>
-  <style>
-    :root {
-      --blue:#1a73e8;--blue-soft:#e8f0fe;--green:#2e7d32;--green-soft:#e8f5e9;
-      --red:#d93025;--red-soft:#fdecea;--orange:#ef6c00;
-      --bg:#f4f7fb;--card:#fff;--line:#e2e8f0;--text:#1f2937;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.15)}
-    header h1{font-size:18px} header a{color:#fff;text-decoration:none;background:rgba(255,255,255,.12);padding:9px 12px;border-radius:10px;font-weight:700}
-    .step-bar{display:flex;background:#fff;border-bottom:2px solid var(--line)}
-    .step{flex:1;text-align:center;padding:12px 6px;font-size:13px;font-weight:700;color:#9ca3af;border-bottom:3px solid transparent}
-    .step.active{color:var(--blue);border-bottom-color:var(--blue);background:#f0f7ff}
-    .step.done{color:var(--green);background:#f0fff4}
-    .page{display:none;padding:16px;max-width:680px;margin:0 auto}
-    .page.active{display:block}
-    .card{background:var(--card);border-radius:18px;box-shadow:0 10px 24px rgba(17,24,39,.08);border:1px solid #edf2f7;padding:18px;margin-bottom:16px}
-    .card h2{font-size:18px;color:var(--blue);margin-bottom:12px}
-    .search-bar{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:15px;margin-bottom:14px}
-    .art-card{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f1f5f9}
-    .art-card:last-child{border-bottom:none}
-    .art-icon{font-size:28px;width:44px;text-align:center}
-    .art-info{flex:1}.art-name{font-weight:700;font-size:15px}.art-meta{font-size:12px;color:#6b7280;margin-top:3px}
-    .art-actions{display:flex;align-items:center;gap:8px}
-    .add-btn,.qty-btn{border:none;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;font-size:14px}
-    .add-btn.blue{background:var(--blue);color:#fff}.add-btn.green{background:var(--green);color:#fff}
-    .qty-btn{background:#eef2f7;color:#374151;font-size:18px;padding:8px 12px}
-    .qty-val{font-weight:800;font-size:16px;min-width:22px;text-align:center}
-    .cart-badge{display:none;position:fixed;bottom:20px;right:20px;background:var(--blue);color:#fff;border-radius:999px;padding:14px 18px;font-weight:800;align-items:center;gap:8px;cursor:pointer;box-shadow:0 6px 18px rgba(26,115,232,.3);z-index:10;font-size:15px}
-    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-    .field label{font-size:13px;font-weight:700;color:#4b5563}
-    .field input,.field select{border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px}
-    .btn{width:100%;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:10px}
-    .btn.blue{background:var(--blue);color:#fff}.btn.green{background:var(--green);color:#fff}.btn.gray{background:#eef2f7;color:#374151}
-    .summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
-    .summary-row:last-child{border-bottom:none}
-    .qty-tag{background:var(--blue-soft);color:var(--blue);border-radius:999px;padding:4px 10px;font-weight:800;font-size:13px}
-    .recap-box{background:#f0f7ff;border:1px solid #dbeafe;border-radius:16px;padding:16px;margin-bottom:14px}
-    .recap-box p{margin-bottom:8px;font-size:14px}
-    .success-icon{font-size:52px;text-align:center;margin-bottom:10px}
-    .trk-display{background:#fff;border:2px solid var(--blue);border-radius:14px;padding:14px;text-align:center;margin:14px 0;word-break:break-all;font-size:20px;font-weight:800;color:var(--blue);letter-spacing:2px}
-    .empty{color:#9ca3af;text-align:center;padding:20px}
-    .toast{position:fixed;right:16px;bottom:70px;background:#111827;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s;z-index:100}
-    .toast.show{opacity:1;transform:translateY(0)}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}
-    @media(max-width:600px){header h1{font-size:16px}.page{padding:12px}}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>WMS – Passer une commande</title>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+:root{--blue:#1a73e8;--red:#e53935;--green:#43a047;--orange:#fb8c00;--bg:#f0f4f8;--card:#fff;--border:#dadce0;--txt:#202124}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+header h1{font-size:16px;font-weight:700}
+#conn-dot{width:10px;height:10px;border-radius:50%;background:#f44;display:inline-block;margin-right:6px;transition:.3s}
+#conn-dot.ok{background:#4caf50}
+.step-bar{display:flex;background:#fff;border-bottom:2px solid var(--border);overflow:hidden}
+.step{flex:1;text-align:center;padding:10px 4px;font-size:12px;font-weight:600;color:#aaa;border-bottom:3px solid transparent;transition:.2s}
+.step.active{color:var(--blue);border-bottom-color:var(--blue);background:#f0f7ff}
+.step.done{color:var(--green);background:#f0fff4}
+.page{display:none;padding:16px;max-width:600px;margin:auto}
+.page.active{display:block}
+.card{background:var(--card);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+h2{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:12px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;transition:.15s}
+.btn:active{transform:scale(.97)}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-gray{background:#e0e0e0;color:#333}
+.btn-red{background:var(--red);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:5px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px rgba(26,115,232,.15)}
+.badge{display:inline-block;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700}
+.badge-urgent{background:var(--red);color:#fff}
+.badge-real{background:#6a1b9a;color:#fff}
+.item-card{background:#f8f9ff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.item-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.item-name{font-size:13px;font-weight:600}
+.item-sku{font-size:11px;color:#888;font-family:monospace}
+.item-location{font-size:12px;color:#555;margin-top:4px}
+.item-progress{margin-top:8px}
+.progress-bar{background:#e0e0e0;border-radius:4px;height:8px;overflow:hidden;margin-top:4px}
+.progress-fill{background:var(--blue);height:100%;border-radius:4px;transition:.3s}
+.progress-fill.done{background:var(--green)}
+.scan-count{font-size:12px;color:#666;margin-top:4px}
+.scan-input-row{display:flex;gap:8px;margin-top:8px}
+.scan-input-row input{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px}
+.scan-input-row button{padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer}
+#alert-bar{position:fixed;top:56px;left:0;right:0;z-index:99;transform:translateY(-100%);transition:.3s;padding:10px 16px;font-size:14px;font-weight:600;text-align:center;display:none}
+#alert-bar.show{transform:translateY(0);display:block}
+#alert-bar.success{background:#43a047;color:#fff}
+#alert-bar.error{background:#e53935;color:#fff}
+#alert-bar.warn{background:#fb8c00;color:#fff}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:12px;padding:24px;max-width:480px;width:95%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.modal-box h3{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:12px}
+.modal-actions{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.summary-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
+.success-box{text-align:center;padding:30px 20px}
+.success-icon{font-size:60px;margin-bottom:16px}
+.tracking-display{background:#f0f7ff;border:2px solid var(--blue);border-radius:8px;padding:16px;text-align:center;margin:16px 0}
+.tracking-num{font-size:22px;font-weight:700;letter-spacing:2px;color:var(--blue);word-break:break-all}
+</style>
 </head>
 <body>
-  <header>
-    <h1>🛒 Passer une commande</h1>
-    <a href="index.html">← Accueil</a>
-  </header>
 
-  <div class="step-bar">
-    <div class="step active" id="step-1">1 · Choisir</div>
-    <div class="step" id="step-2">2 · Infos</div>
-    <div class="step" id="step-3">3 · Envoyé ✓</div>
+<header>
+  <h1>📦 WMS – Passer une commande</h1>
+  <div style="display:flex;align-items:center;gap:4px;font-size:12px">
+    <span id="conn-dot"></span><span id="conn-txt">Connexion...</span>
   </div>
+</header>
 
-  <!-- PAGE 1 : Choisir les articles -->
-  <div id="page-1" class="page active">
-    <div class="card">
-      <h2>Choisissez vos articles</h2>
-      <input class="search-bar" id="article-search" type="text" placeholder="Rechercher un article…" />
-      <div id="article-list"></div>
+<!-- Barre de progression étapes -->
+<div class="step-bar">
+  <div class="step active" id="step-1">1 Choisir</div>
+  <div class="step" id="step-2">2 Scanner</div>
+  <div class="step" id="step-3">3 Infos</div>
+  <div class="step" id="step-4">4 Envoyé !</div>
+</div>
+
+<!-- Alert bar -->
+<div id="alert-bar"></div>
+
+<!-- ============================================================ PAGE 1 : Choisir une commande -->
+<div id="page-1" class="page active">
+  <div class="card">
+    <h2>🎯 Choisissez votre commande</h2>
+    <div class="form-group">
+      <label>Mon prénom et nom *</label>
+      <input type="text" id="user-name" placeholder="Ex: Jean Dupont" autocomplete="name">
     </div>
-    <button class="btn blue" id="btn-to-info">Continuer →</button>
+    <div class="form-group">
+      <label>Sélectionner la commande</label>
+      <select id="order-select"><option value="">Chargement...</option></select>
+    </div>
+    <div id="order-preview" style="display:none;margin-top:12px"></div>
   </div>
+  <button class="btn btn-blue" onclick="goToScan()">Commencer la préparation →</button>
+</div>
 
-  <!-- PAGE 2 : Infos livraison -->
-  <div id="page-2" class="page">
-    <div class="card">
-      <h2>Votre récapitulatif panier</h2>
-      <div id="cart-summary"></div>
-    </div>
-    <div class="card">
-      <h2>Vos informations</h2>
-      <div class="field"><label>Prénom</label><input id="info-prenom" placeholder="Votre prénom" /></div>
-      <div class="field"><label>Nom</label><input id="info-nom" placeholder="Votre nom" /></div>
-      <div class="field"><label>Adresse</label><input id="info-adresse" placeholder="Rue et numéro" /></div>
-      <div class="field"><label>Ville / CP</label><input id="info-ville" placeholder="Ex : 4000 Liège" /></div>
-      <div class="field"><label>Mode de livraison</label>
-        <select id="info-mode">
-          <option value="Standard">Standard</option>
-          <option value="Express">Express (urgent)</option>
-          <option value="Retrait dépôt">Retrait au dépôt</option>
-          <option value="Interne">Livraison interne</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn green" id="btn-send">Envoyer la commande</button>
-    <button class="btn gray" id="btn-back-choix">← Retour</button>
+<!-- ============================================================ PAGE 2 : Scanner les articles -->
+<div id="page-2" class="page">
+  <div class="card" id="order-info-bar"></div>
+  <div id="items-container"></div>
+  <button class="btn btn-blue" id="btn-validate" onclick="confirmValidation()">✅ Valider la commande</button>
+  <button class="btn btn-gray" onclick="goToPage(1)">← Retour</button>
+</div>
+
+<!-- ============================================================ PAGE 3 : Infos livraison -->
+<div id="page-3" class="page">
+  <div class="card">
+    <h2>📋 Informations de livraison</h2>
+    <div class="form-group"><label>Service / Bureau *</label><input type="text" id="info-service" placeholder="Ex: Logistique"></div>
+    <div class="form-group"><label>Lieu de livraison *</label><input type="text" id="info-lieu" placeholder="Ex: Quai 3 - Entrepôt B"></div>
+    <div class="form-group"><label>Commentaire (optionnel)</label><textarea id="info-comment" rows="3" placeholder="Remarques…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px"></textarea></div>
   </div>
+  <button class="btn btn-green" onclick="submitOrder()">✅ Envoyer la demande</button>
+  <button class="btn btn-gray" onclick="goToPage(2)">← Retour</button>
+</div>
 
-  <!-- PAGE 3 : Confirmation -->
-  <div id="page-3" class="page">
-    <div class="card" style="text-align:center">
-      <div class="success-icon">✅</div>
-      <h2 style="font-size:22px">Commande envoyée !</h2>
-      <p style="color:#6b7280;margin-top:8px">Votre demande a bien été transmise au service logistique.</p>
+<!-- ============================================================ PAGE 4 : Succès -->
+<div id="page-4" class="page">
+  <div class="card success-box">
+    <div class="success-icon">🎉</div>
+    <h2 style="font-size:20px;text-align:center">Demande envoyée !</h2>
+    <p style="text-align:center;color:#666;margin-top:8px">Votre commande a bien été transmise aux caristes.</p>
+    <div class="tracking-display">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;margin-bottom:4px">Numéro de tracking</div>
+      <div class="tracking-num" id="confirm-tracking">—</div>
+      <svg id="confirm-barcode" style="max-width:100%;margin-top:8px"></svg>
     </div>
-    <div class="card">
-      <h2>Récapitulatif</h2>
-      <div class="recap-box">
-        <p><strong>Numéro de tracking :</strong></p>
-        <div class="trk-display" id="recap-tracking">—</div>
-        <p><strong>Client :</strong> <span id="recap-client">—</span></p>
-        <p><strong>Adresse :</strong> <span id="recap-adresse">—</span></p>
-        <p><strong>Livraison :</strong> <span id="recap-mode">—</span></p>
-        <p><strong>Date :</strong> <span id="recap-date">—</span></p>
-      </div>
-      <div id="recap-items"></div>
+    <p style="text-align:center;color:#666;font-size:13px">Conservez ce numéro pour suivre votre demande.</p>
+  </div>
+  <button class="btn btn-blue" onclick="resetApp()">📦 Nouvelle demande</button>
+</div>
+
+<!-- ============================================================ MODAL CONFIRMATION VALIDATION -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-box">
+    <h3>✅ Confirmer la validation</h3>
+    <div id="modal-confirm-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-green" onclick="doValidateOrder()">✅ Oui, je confirme</button>
+      <button class="btn btn-gray" onclick="closeConfirmModal()">← Annuler</button>
     </div>
-    <button class="btn blue" id="btn-reset">Passer une nouvelle commande</button>
   </div>
+</div>
 
-  <!-- Badge panier flottant -->
-  <div class="cart-badge" id="cart-badge" onclick="document.getElementById('btn-to-info').click()">
-    🛒 <span id="cart-count">0</span> article(s)
+<!-- MODAL Urgent -->
+<div class="modal-overlay" id="modal-urgent">
+  <div class="modal-box" style="text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">🚨</div>
+    <h3 style="color:var(--red)">COMMANDE URGENTE !</h3>
+    <p id="modal-urgent-msg" style="margin-top:8px;color:#555"></p>
+    <div class="modal-actions">
+      <button class="btn btn-red" onclick="document.getElementById('modal-urgent').classList.remove('show')">OK, j'ai compris</button>
+    </div>
   </div>
+</div>
 
-  <div id="toast" class="toast"></div>
+<script>
+// ============================================================
+// FIREBASE CONFIG — mêmes valeurs que dans wms.html
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  databaseURL: "https://wms-logistique-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
+}
+
+let _fbDb = null;
+let _fbRef = null;
+
+function initFirebase() {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    _fbDb = firebase.database();
+    _fbRef = _fbDb.ref('wms');
+    setConn(true);
+    // Ecoute temps reel des commandes
+    _fbRef.child('orders').on('value', snap => {
+      const data = snap.val();
+      if (data) { orders = Object.values(data); }
+      else { orders = loadLocal('wms_orders'); }
+      populateOrderSelect();
+      if (currentOrder) {
+        const upd = orders.find(o => o.id === currentOrder.id);
+        if (upd) { currentOrder = upd; if(isPage(2)) renderScanPage(); }
+      }
+    });
+    // Ecoute temps reel des articles
+    _fbRef.child('articles').on('value', snap => {
+      const data = snap.val();
+      if (data) articles = Object.values(data);
+      else articles = loadLocal('wms_articles') || defaultArticles();
+    });
+  } catch(e) {
+    console.warn('Firebase non configure — mode localStorage:', e.message);
+    setConn(false);
+    articles = loadLocal('wms_articles') || defaultArticles();
+    orders   = loadLocal('wms_orders')   || [];
+    populateOrderSelect();
+  }
+}
+
+function setConn(ok) {
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-txt');
+  if (dot) dot.classList.toggle('ok', ok);
+  if (txt) txt.textContent = ok ? 'Firebase connecte' : 'Mode local';
+}
+
+function loadLocal(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ return null; }
+}
+
+function saveOrder(order) {
+  // Mise a jour locale
+  const idx = orders.findIndex(o => o.id === order.id);
+  if (idx !== -1) orders[idx] = order; else orders.push(order);
+  localStorage.setItem('wms_orders', JSON.stringify(orders));
+  // Sync Firebase
+  if (_fbRef) {
+    _fbRef.child('orders/' + order.id).set(order).catch(() => {});
+  }
+}
+
+// ============================================================
+// ARTICLES PAR DEFAUT (150 articles)
+// ============================================================
+function defaultArticles() {
+  return [
+    {sku:"PAP-001",name:"Papier blanc recycle 80g A4 2500f",qty:120,location:"Allee A - Etagere 1",category:"Papier et cahiers",threshold:10},
+    {sku:"PAP-002",name:"Notes Post-it 76x76mm x16 blocs",qty:85,location:"Allee A - Etagere 1",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-003",name:"Bloc cours A4 70g quadrille x20",qty:60,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-004",name:"Navigator Universal 80g A4 500f",qty:200,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:20},
+    {sku:"PAP-005",name:"Navigator Universal 80g A3 500f",qty:80,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:10},
+    {sku:"PAP-006",name:"Clairefontaine 160g A4 250f",qty:50,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-007",name:"Clairefontaine 210g A4 250f",qty:50,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-008",name:"Clairefontaine 250g A4 125f",qty:30,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-009",name:"Trophee vert golf 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-010",name:"Trophee jaune soleil 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-011",name:"Trophee rose intense 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-012",name:"Trophee rouge corail 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-013",name:"Trophee turquoise 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-014",name:"Trophee lilas 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-015",name:"Trophee chamois 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-016",name:"Class'Ex bloc cours quadrille 5mm",qty:40,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-017",name:"Class'Ex bloc cours quadrille commercial",qty:40,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-018",name:"Cahier spirale pages quadrillees couverture rigide",qty:35,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-019",name:"Cahier calligraphie 4 lignes A5 72 pages",qty:25,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:3},
+    {sku:"PAP-020",name:"Bloc tableau conference 68x95cm",qty:15,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:2},
+    {sku:"PAP-021",name:"Info Notes memo jaune 40x50mm pack/12",qty:40,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-022",name:"Info Notes memo jaune 50x75mm pack/12",qty:40,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-023",name:"Info Notes memo jaune 75x75mm pack/12",qty:40,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+    {sku:"PAP-024",name:"Info Notes memo jaune 75x125mm pack/12",qty:30,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:3},
+    {sku:"PAP-025",name:"Z-notes recyclees",qty:30,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+    {sku:"ECR-001",name:"BIC M10 stylo bille boite 50 pieces",qty:100,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-002",name:"BIC M10 bleu 90+10 gratuits",qty:80,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-003",name:"Bic bille 4 couleurs moyen",qty:60,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-004",name:"Bic bille 3 couleurs + porte-mines",qty:40,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-005",name:"Marqueur Artline 70 noir boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-006",name:"Marqueur Artline 70 bleu boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-007",name:"Marqueur Artline 70 rouge boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-008",name:"Marqueur Artline 70 vert boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-009",name:"Legamaster Boardmarker roller noir",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-010",name:"Legamaster Boardmarker roller bleu",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-011",name:"Legamaster Boardmarker roller rouge",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-012",name:"Legamaster Boardmarker roller vert",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-013",name:"Legamaster Boardmarker pochette",qty:20,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-014",name:"Staedtler surligneur jaune",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-015",name:"Staedtler surligneur rose",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-016",name:"Staedtler surligneur vert",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-017",name:"Staedtler surligneur bleu",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-018",name:"Staedtler surligneur orange",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-019",name:"Staedtler surligneur violet",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-020",name:"Staedtler etui 8 pieces",qty:30,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-021",name:"Staedtler etui 4 pieces",qty:30,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-022",name:"5 Star derouleur de correction",qty:40,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-023",name:"Gomme PVC 5 STAR",qty:60,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:10},
+    {sku:"ECR-024",name:"5 Star crayon HB sans gomme boite/12",qty:40,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-025",name:"Staedtler taille-crayon metal 1 trou",qty:50,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-026",name:"Crayons de couleur triangulaire Coro'Peps",qty:25,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-027",name:"Feutre Roller Birello 12 couleurs",qty:25,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-028",name:"EnerGel Pentel LR7-A 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-029",name:"EnerGel Pentel LR7-B 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-030",name:"EnerGel Pentel LR7-C 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-031",name:"EnerGel Pentel LR7-D 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+    {sku:"ECR-032",name:"EnerGel Pentel BL77-AO 0.7mm",qty:30,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-033",name:"EnerGel Pentel BL77-BO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-034",name:"EnerGel Pentel BL77-CO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+    {sku:"ECR-035",name:"EnerGel Pentel BL77-DO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+    {sku:"CLA-001",name:"Classeur levier 2 anneaux carton A4 dos 8cm",qty:60,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:5},
+    {sku:"CLA-002",name:"Chemise presentation lamelles polypro A4 x25",qty:40,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:5},
+    {sku:"CLA-003",name:"20 boites chemises ESSELTE 56066",qty:10,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-004",name:"Fardes 3 rabats blanc x100",qty:5,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:1},
+    {sku:"CLA-005",name:"Pochettes perforees A4 80mu x100",qty:50,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:5},
+    {sku:"CLA-006",name:"Chemise A4 ESSELTE 56066 pack/100",qty:30,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-007",name:"Chemise A4 ESSELTE 56218 pack/100",qty:30,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-008",name:"Chemise classement fenetre colorees pack/100",qty:30,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-009",name:"Classeur carton marbre gris Pergamy dos 8cm",qty:40,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:5},
+    {sku:"CLA-010",name:"Classeur carton marbre gris Pergamy dos 5cm",qty:40,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:5},
+    {sku:"CLA-011",name:"Classeur LEITZ 180 deg dos 8cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-012",name:"Classeur LEITZ 180 deg dos 5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-013",name:"Classeur ESSELTE 7.5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-014",name:"Classeur ESSELTE 5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-015",name:"Classeur Kangaro dos 8cm",qty:30,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-016",name:"Classeur Kangaro dos 5cm",qty:30,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-017",name:"Classeur Power N1 Vivida rouge boite/10",qty:10,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-018",name:"Classeur Power N1 Vivida vert boite/10",qty:10,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-019",name:"Classeur Power N1 Vivida bleu boite/10",qty:10,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-020",name:"Classeur souple anneau dos 3.5cm cristal mat",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-021",name:"Classeur souple anneau dos 3.5cm pourpre",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-022",name:"Classeur souple CLASS'EX dos 2cm bleu",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-023",name:"Classeur souple CLASS'EX dos 2cm rouge",qty:20,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-024",name:"Fardes a devis Leitz VERT boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-025",name:"Fardes a devis Leitz ROUGE boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-026",name:"Fardes a devis Leitz BLEU boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-027",name:"Fardes a devis Leitz BLANC boite/25",qty:15,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-028",name:"Intercalaires Class Ex bleu pack/100",qty:20,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-029",name:"Intercalaires Class Ex cerise pack/100",qty:20,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-030",name:"Intercalaires Class Ex vert pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-031",name:"Intercalaires Class Ex jaune pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-032",name:"Intercalaires Class Ex beige pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-033",name:"Intercalaires Class Ex rouge pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-034",name:"Boite archives 112636 CLASS'EX",qty:25,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-035",name:"Relieur D-Clip Bankers Box boite/100",qty:10,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-036",name:"D-clip MULTICOM boite/100 pattes archivage",qty:10,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-037",name:"Porte-revue MAUL",qty:15,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-038",name:"Bacs courrier Europost Vivida blanc",qty:12,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-039",name:"Etiquettes dos Leitz blanche ref 1640-00-01",qty:20,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-040",name:"Etiquettes dos Leitz blanche ref 1648-00-01",qty:20,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-041",name:"Etiquettes dos Leitz blanche ref 1642-00-85",qty:20,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-042",name:"Etiquettes dos Leitz rouge emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-043",name:"Etiquettes dos Leitz bleu emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-044",name:"Etiquettes dos Leitz vert emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-045",name:"Feuille etiquette pleine page Pergamy",qty:30,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-046",name:"Feuille etiquette 21 etiquettes Pergamy",qty:30,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:3},
+    {sku:"CLA-047",name:"Pochettes plastification A4 100mu pack/100",qty:15,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:2},
+    {sku:"CLA-048",name:"Pochettes plastification A3 125mu pack/100",qty:10,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:2},
+    {sku:"MAT-001",name:"Perforateur ALU 65",qty:15,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-002",name:"Bostitch agrafeuse B8R noir",qty:12,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-003",name:"Agrafeuse long bras NOVUS B54/3",qty:8,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:1},
+    {sku:"MAT-004",name:"5 Star agraphe boite/5000",qty:30,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-005",name:"Bostitch agrafe boite/5000",qty:30,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-006",name:"5 Star agrafes 24/6 galvanisees boite/1000",qty:20,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-007",name:"Agrafes NOVUS B54/3",qty:20,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-008",name:"Desk'One ciseaux 16cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-009",name:"Desk'One ciseaux 18cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-010",name:"Desk'One ciseaux 21cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-011",name:"Cellfix papier collant 19mmx33m emb/8",qty:25,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-012",name:"Ruban adhesif PP transparent 50mmx66m",qty:20,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-013",name:"Tube de colle",qty:40,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:5},
+    {sku:"MAT-014",name:"Punaises couleurs assorties 100 pieces",qty:30,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-015",name:"Punaises couleurs assorties 750 pieces",qty:15,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-016",name:"Aimant MAULsolid 15mm boite/10",qty:20,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-017",name:"Aimant MAULsolid 38mm boite/10",qty:15,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-018",name:"Paquet 100 porte-cles plastique couleurs",qty:10,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-019",name:"Bande Maul magnetique 35mmx10m",qty:8,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:1},
+    {sku:"MAT-020",name:"Bande metallique souple Maul blanche 35mmx5m x2",qty:8,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:1},
+    {sku:"MAT-021",name:"Latte plastique 30cm",qty:25,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-022",name:"Equerre geometrique transparente 16cm Gallery",qty:20,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:3},
+    {sku:"MAT-023",name:"Calculatrice Q Connect",qty:10,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-024",name:"Calculatrice Olympio",qty:10,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-025",name:"Calculatrice Casio",qty:10,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:2},
+    {sku:"MAT-026",name:"Dahle cisaille levier 561 A4 cap 35f",qty:5,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:1},
+    {sku:"MAT-027",name:"Compteuse de pieces CC202",qty:5,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:1},
+    {sku:"CON-001",name:"DURACELL 9V",qty:30,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+    {sku:"CON-002",name:"Energizer pile Max 9V 6LR61 pack/1",qty:30,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+    {sku:"CON-003",name:"Pile AA LR6 alkaline pack/10",qty:50,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+    {sku:"CON-004",name:"Pile AAA LR03 alkaline pack/10",qty:50,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+    {sku:"CON-005",name:"Pile CR2032 lithium pack/5",qty:20,location:"Allee F - Etagere 2",category:"Consommables et energie",threshold:3},
+    {sku:"TAB-001",name:"Tableau blanc effacable 60x90cm",qty:5,location:"Allee G - Rack 1",category:"Tableaux et enseignement",threshold:1},
+    {sku:"TAB-002",name:"Tableau blanc effacable 90x120cm",qty:4,location:"Allee G - Rack 1",category:"Tableaux et enseignement",threshold:1},
+    {sku:"TAB-003",name:"Spray nettoyant tableau blanc 500ml",qty:15,location:"Allee G - Etagere 1",category:"Tableaux et enseignement",threshold:3},
+    {sku:"TAB-004",name:"Effaceur tableau Legamaster",qty:10,location:"Allee G - Etagere 1",category:"Tableaux et enseignement",threshold:2},
+    {sku:"TAB-005",name:"Compas scolaire metal pointe seche",qty:20,location:"Allee G - Etagere 2",category:"Tableaux et enseignement",threshold:3},
+    {sku:"TAB-006",name:"Rapporteur 180 deg transparent 10cm",qty:15,location:"Allee G - Etagere 2",category:"Tableaux et enseignement",threshold:3},
+    {sku:"MOB-001",name:"Bac rangement plastique gris 40x30x15cm",qty:10,location:"Zone H - Rack 1",category:"Mobilier et rangement",threshold:2},
+    {sku:"MOB-002",name:"Organiseur bureau 5 compartiments noir",qty:8,location:"Zone H - Rack 1",category:"Mobilier et rangement",threshold:1},
+    {sku:"MOB-003",name:"Porte-stylos cylindrique noir",qty:12,location:"Zone H - Rack 2",category:"Mobilier et rangement",threshold:2},
+    {sku:"MOB-004",name:"Corbeille a papier 16L gris metallique",qty:6,location:"Zone H - Rack 2",category:"Mobilier et rangement",threshold:1}
+  ];
+}
+
+// ============================================================
+// ETAT
+// ============================================================
+let articles = [];
+let orders   = [];
+let currentOrder = null;
+let userName = '';
+
+// ============================================================
+// UTILITAIRES
+// ============================================================
+let alertTimer = null;
+function showAlert(msg, type='success', duration=3000) {
+  const bar = document.getElementById('alert-bar');
+  bar.textContent = msg;
+  bar.className = 'show ' + type;
+  clearTimeout(alertTimer);
+  alertTimer = setTimeout(() => { bar.classList.remove('show'); }, duration);
+}
+
+function isPage(n) { return document.getElementById('page-'+n).classList.contains('active'); }
+function showPage(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById('page-'+i).classList.toggle('active', i===n);
+    const step = document.getElementById('step-'+i);
+    if (step) {
+      step.classList.toggle('active', i===n);
+      step.classList.toggle('done', i<n);
+    }
+  });
+}
+function goToPage(n) { showPage(n); }
+
+function playUrgentSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [440,550,660,550,440].forEach((freq,i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq; osc.type = 'square';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime+i*0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+i*0.15+0.14);
+      osc.start(ctx.currentTime+i*0.15);
+      osc.stop(ctx.currentTime+i*0.15+0.15);
+    });
+  } catch(e) {}
+}
+
+function playBeep(ok=true) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = ok ? 880 : 220;
+    osc.type = ok ? 'sine' : 'sawtooth';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+// ============================================================
+// PAGE 1 : Selection commande
+// ============================================================
+function populateOrderSelect() {
+  const sel = document.getElementById('order-select');
+  const prev = sel.value;
+  const available = orders.filter(o => o.status === 'pending' || o.status === 'inprogress');
+  sel.innerHTML = '<option value="">— Selectionner une commande —</option>' +
+    available.map(o => {
+      const label = o.id + ' – ' + o.client + (o.urgent ? ' URGENT' : '') + (o.isReal ? ' [Reelle]' : '');
+      return '<option value="' + o.id + '"' + (o.id===prev?' selected':'') + '>' + label + '</option>';
+    }).join('');
+  sel.onchange = previewOrder;
+  if (prev) previewOrder();
+}
+
+function previewOrder() {
+  const id = document.getElementById('order-select').value;
+  const o = orders.find(x => x.id === id);
+  const box = document.getElementById('order-preview');
+  if (!o) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const totalItems = o.items.reduce((s,it) => s + it.qty, 0);
+  const scanned = o.items.reduce((s,it) => s + (it.scanned||0), 0);
+  box.innerHTML = '<div style="padding:10px;background:#f0f7ff;border-radius:8px;border:1px solid #c5d9f7">' +
+    '<strong>' + o.client + '</strong>' +
+    '<div style="font-size:12px;color:#555;margin-top:4px">Tracking: ' + (o.tracking||'—') + '</div>' +
+    '<div style="font-size:12px;color:#555">' + o.items.length + ' article(s) — ' + totalItems + ' piece(s) total</div>' +
+    (o.urgent ? '<div style="color:#e53935;font-weight:700;margin-top:4px">⚠️ URGENT</div>' : '') +
+    '<div style="margin-top:8px;background:#e0e0e0;border-radius:4px;height:8px"><div style="background:#1a73e8;height:8px;border-radius:4px;width:' + Math.round(scanned/Math.max(totalItems,1)*100) + '%"></div></div>' +
+    '<div style="font-size:11px;color:#888;margin-top:3px">' + scanned + ' / ' + totalItems + ' scanned</div>' +
+    '</div>';
+}
+
+function goToScan() {
+  userName = (document.getElementById('user-name').value || '').trim();
+  if (!userName) { showAlert('Entrez votre prenom et nom', 'error'); return; }
+  const id = document.getElementById('order-select').value;
+  if (!id) { showAlert('Selectionnez une commande', 'error'); return; }
+  currentOrder = orders.find(o => o.id === id);
+  if (!currentOrder) { showAlert('Commande introuvable', 'error'); return; }
+  // Marquer en cours
+  currentOrder.status = 'inprogress';
+  currentOrder.assignedTo = userName;
+  currentOrder.items.forEach(it => { if (!it.scanned) it.scanned = 0; });
+  saveOrder(currentOrder);
+  renderScanPage();
+  showPage(2);
+}
+
+// ============================================================
+// PAGE 2 : Scan des articles
+// ============================================================
+function renderScanPage() {
+  if (!currentOrder) return;
+  const total = currentOrder.items.reduce((s,it) => s+it.qty, 0);
+  const scanned = currentOrder.items.reduce((s,it) => s+(it.scanned||0), 0);
+  const pct = Math.round(scanned / Math.max(total,1) * 100);
+  document.getElementById('order-info-bar').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+    '<div><strong>' + currentOrder.id + '</strong> — ' + currentOrder.client + '</div>' +
+    '<div style="font-size:13px;color:#555">' + scanned + ' / ' + total + ' (' + pct + '%)</div>' +
+    '</div>' +
+    '<div style="background:#e0e0e0;border-radius:4px;height:8px;margin-top:8px">' +
+    '<div style="background:' + (pct===100?'#43a047':'#1a73e8') + ';height:8px;border-radius:4px;width:' + pct + '%;transition:.3s"></div>' +
+    '</div>';
+
+  const container = document.getElementById('items-container');
+  container.innerHTML = currentOrder.items.map((it, idx) => {
+    const done = (it.scanned||0) >= it.qty;
+    return '<div class="item-card" style="' + (done?'opacity:.7;border-color:#43a047':'') + '">' +
+      '<div class="item-header">' +
+      '<div><div class="item-name">' + it.name + '</div>' +
+      '<div class="item-sku">' + it.sku + '</div>' +
+      '<div class="item-location">' + (it.location || (articles.find(a=>a.sku===it.sku)||{}).location || '') + '</div></div>' +
+      '<div style="text-align:right">' +
+        (done ? '<span style="color:#43a047;font-size:18px">✅</span>' :
+          '<button onclick="quickScan(\'' + it.sku + '\')" style="padding:6px 10px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">+1</button>') +
+      '</div>' +
+      '</div>' +
+      '<div class="item-progress">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#666">' +
+          '<span>Scanned</span><span>' + (it.scanned||0) + ' / ' + it.qty + '</span></div>' +
+        '<div class="progress-bar"><div class="progress-fill' + (done?' done':'') + '" style="width:' + Math.round((it.scanned||0)/it.qty*100) + '%"></div></div>' +
+      '</div>' +
+      '<div class="scan-input-row" style="' + (done?'display:none':'') + '">' +
+        '<input type="text" id="scan-input-' + idx + '" placeholder="Scanner ou saisir SKU..." onkeydown="if(event.key===\'Enter\')processScanInput(\'' + it.sku + '\',' + idx + ')">' +
+        '<button onclick="processScanInput(\'' + it.sku + '\',' + idx + ')">OK</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  const btnValidate = document.getElementById('btn-validate');
+  btnValidate.style.display = pct === 100 ? 'flex' : 'none';
+}
+
+function quickScan(sku) {
+  processScan(sku);
+}
+
+function processScanInput(expectedSku, idx) {
+  const input = document.getElementById('scan-input-' + idx);
+  const val = (input.value || '').trim().toUpperCase();
+  if (!val) return;
+  processScan(val, expectedSku);
+  input.value = '';
+}
+
+function processScan(sku, expectedSku) {
+  if (!currentOrder) return;
+  const it = currentOrder.items.find(i => i.sku === sku || i.sku === expectedSku);
+  if (!it) {
+    showAlert('❌ Article non reconnu : ' + sku, 'error', 2500);
+    playBeep(false);
+    return;
+  }
+  if (it.scanned >= it.qty) {
+    showAlert('⚠️ ' + it.name + ' deja complete !', 'warn', 2000);
+    return;
+  }
+  it.scanned = (it.scanned||0) + 1;
+  showAlert('✅ ' + it.name + ' (' + it.scanned + '/' + it.qty + ')', 'success', 2000);
+  playBeep(true);
+  saveOrder(currentOrder);
+  renderScanPage();
+}
+
+// ============================================================
+// PAGE 2 → PAGE 3 : Validation
+// ============================================================
+function confirmValidation() {
+  const total = currentOrder.items.reduce((s,it) => s+it.qty, 0);
+  const scanned = currentOrder.items.reduce((s,it) => s+(it.scanned||0), 0);
+  if (scanned < total) {
+    showAlert('❌ Tous les articles ne sont pas scannes (' + scanned + '/' + total + ')', 'error', 3000);
+    return;
+  }
+  if (!confirm('Confirmer la validation de la commande ' + currentOrder.id + ' ?\n(' + total + ' articles prepares)')) return;
+  showPage(3);
+}
+
+// ============================================================
+// PAGE 3 : Envoi commande
+// ============================================================
+function submitOrder() {
+  const service = (document.getElementById('info-service').value || '').trim();
+  const lieu    = (document.getElementById('info-lieu').value || '').trim();
+  if (!service || !lieu) { showAlert('Remplissez service et lieu de livraison', 'error'); return; }
+  const comment = document.getElementById('info-comment').value || '';
+
+  currentOrder.status = 'shipped';
+  currentOrder.assignedTo = userName + ' | ' + service + ' | ' + lieu;
+  currentOrder.comment = comment;
+  currentOrder.shippedAt = new Date().toISOString();
+  saveOrder(currentOrder);
+
+  // Historique
+  const hist = JSON.parse(localStorage.getItem('wms_historique')||'[]');
+  hist.unshift({
+    date: new Date().toISOString(),
+    type: 'Expedition',
+    orderId: currentOrder.id,
+    client: currentOrder.client,
+    user: userName,
+    service: service,
+    lieu: lieu,
+    items: currentOrder.items.length
+  });
+  localStorage.setItem('wms_historique', JSON.stringify(hist.slice(0,200)));
+
+  showPage(4);
+  document.getElementById('confirm-tracking').textContent = currentOrder.tracking || '—';
+  try {
+    JsBarcode('#confirm-barcode', currentOrder.tracking||currentOrder.id, {
+      format:'CODE128', width:2, height:50, displayValue:false
+    });
+  } catch(e) {}
+}
+
+function newOrder() {
+  currentOrder = null;
+  userName = '';
+  document.getElementById('user-name').value = '';
+  document.getElementById('order-select').value = '';
+  document.getElementById('order-preview').style.display = 'none';
+  document.getElementById('info-service').value = '';
+  document.getElementById('info-lieu').value = '';
+  document.getElementById('info-comment').value = '';
+  showPage(1);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  articles = loadLocal('wms_articles') || defaultArticles();
+  orders   = loadLocal('wms_orders')   || [];
+  populateOrderSelect();
+  initFirebase();
+});
+</script>
 </body>
 </html>
