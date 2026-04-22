@@ -87,6 +87,10 @@ tr:hover td{background:#f8f9ff}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -411,6 +415,62 @@ tr:hover td{background:#f8f9ff}
 
 <script>
 // ============================================================
+// FIREBASE CONFIG — remplacez par vos vraies valeurs
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  databaseURL: "https://wms-logistique-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
+}
+let _fbApp, _fbDb, _fbRef;
+function initFirebase() {
+  try {
+    _fbApp = firebase.initializeApp(firebaseConfig);
+    _fbDb  = firebase.database();
+    _fbRef = _fbDb.ref('wms');
+    // Ecoute temps reel
+    _fbRef.child('orders').on('value', snap => {
+      const data = snap.val();
+      if(data) {
+        orders = Object.values(data);
+        renderOrders(); renderUrgentList(); updateStats();
+        if(document.getElementById('tab-historique').classList.contains('active')) renderHistorique();
+      }
+    });
+    _fbRef.child('articles').on('value', snap => {
+      const data = snap.val();
+      if(data) {
+        articles = Object.values(data);
+        renderArticles(); updateStats(); populateCategoryFilter();
+      }
+    });
+    document.getElementById('conn-status').textContent = '🟢 Firebase';
+  } catch(e) {
+    console.warn('Firebase non configure, mode local:', e.message);
+    document.getElementById('conn-status').textContent = '📂 Mode local';
+  }
+}
+// Wrapper persistData avec sync Firebase
+function persistData() {
+  localStorage.setItem('wms_articles', JSON.stringify(articles));
+  localStorage.setItem('wms_orders',   JSON.stringify(orders));
+  if(_fbDb) {
+    const artObj = {}; articles.forEach((a,i)=>{ artObj[a.sku]=a; });
+    const ordObj = {}; orders.forEach(o=>{ ordObj[o.id]=o; });
+    _fbRef.child('articles').set(artObj).catch(()=>{});
+    _fbRef.child('orders').set(ordObj).catch(()=>{});
+  }
+}
+function loadFromStorage() {
+  try { articles = JSON.parse(localStorage.getItem('wms_articles')||'null') || []; } catch(e){ articles=[]; }
+  try { orders   = JSON.parse(localStorage.getItem('wms_orders')  ||'null') || []; } catch(e){ orders=[]; }
+}
+
+// ============================================================
 // UTILITAIRES
 // ============================================================
 let articles = [];
@@ -420,14 +480,8 @@ let qrInstance = null;
 // -- MODE STATIQUE GitHub Pages -- localStorage uniquement ---------------------
 document.getElementById('conn-status').textContent = '📂 Mode local';
 
-function persistData() {
-  localStorage.setItem('wms_articles', JSON.stringify(articles));
-  localStorage.setItem('wms_orders',   JSON.stringify(orders));
-}
-function loadFromStorage() {
-  try { articles = JSON.parse(localStorage.getItem('wms_articles') || 'null') || []; } catch(e){ articles=[]; }
-  try { orders   = JSON.parse(localStorage.getItem('wms_orders')   || 'null') || []; } catch(e){ orders=[]; }
-}
+
+
 
 // ============================================================
 // TABS
@@ -885,47 +939,157 @@ function closeModal() {
 // ============================================================
 function defaultArticles() {
   return [
-    {sku:'LOG-001',name:'Carton standard 40x30x20',qty:450,location:'Allée A - Étagère 1',category:'Emballage',threshold:50},
-    {sku:'LOG-002',name:'Carton grand 60x40x40',qty:210,location:'Allée A - Étagère 2',category:'Emballage',threshold:30},
-    {sku:'LOG-003',name:'Carton plat 40x30x5',qty:150,location:'Allée A - Étagère 3',category:'Emballage',threshold:30},
-    {sku:'LOG-004',name:'Rouleau bulle 50m',qty:12,location:'Allée A - Étagère 4',category:'Protection',threshold:5},
-    {sku:'LOG-005',name:'Rouleau bulle 100m',qty:8,location:'Allée A - Étagère 4',category:'Protection',threshold:3},
-    {sku:'LOG-006',name:'Adhésif transparent 50mm x 66m',qty:180,location:'Allée B - Étagère 1',category:'Fermeture',threshold:20},
-    {sku:'LOG-007',name:'Adhésif fragile 50mm x 66m',qty:80,location:'Allée B - Étagère 1',category:'Fermeture',threshold:15},
-    {sku:'LOG-008',name:'Dévidoir ruban adhésif',qty:15,location:'Allée B - Étagère 2',category:'Outillage',threshold:2},
-    {sku:'LOG-009',name:'Cale en mousse x100',qty:40,location:'Allée B - Étagère 3',category:'Protection',threshold:10},
-    {sku:'LOG-010',name:'Sachet zip 10x15cm x500',qty:60,location:'Allée B - Étagère 4',category:'Emballage',threshold:10},
-    {sku:'LOG-011',name:'Sachet zip 20x30cm x500',qty:45,location:'Allée B - Étagère 4',category:'Emballage',threshold:10},
-    {sku:'LOG-012',name:'Palette bois EPAL 80x120',qty:120,location:'Zone Stockage Masse 1',category:'Manutention',threshold:20},
-    {sku:'LOG-013',name:'Palette plastique 80x120',qty:50,location:'Zone Stockage Masse 2',category:'Manutention',threshold:10},
-    {sku:'LOG-014',name:'Film étirable palette noir',qty:30,location:'Allée C - Étagère 1',category:'Manutention',threshold:5},
-    {sku:'LOG-015',name:'Film étirable palette transparent',qty:65,location:'Allée C - Étagère 1',category:'Manutention',threshold:10},
-    {sku:'LOG-016',name:'Gants de manutention Taille 9',qty:120,location:'Allée C - Étagère 2',category:'EPI',threshold:15},
-    {sku:'LOG-017',name:'Gants de manutention Taille 10',qty:90,location:'Allée C - Étagère 2',category:'EPI',threshold:15},
-    {sku:'LOG-018',name:'Gilet haute visibilité Jaune',qty:40,location:'Allée C - Étagère 3',category:'EPI',threshold:5},
-    {sku:'LOG-019',name:'Gilet haute visibilité Orange',qty:35,location:'Allée C - Étagère 3',category:'EPI',threshold:5},
-    {sku:'LOG-020',name:'Chaussures de sécurité T42',qty:8,location:'Allée C - Étagère 4',category:'EPI',threshold:2},
-    {sku:'LOG-021',name:'Chaussures de sécurité T43',qty:10,location:'Allée C - Étagère 4',category:'EPI',threshold:2},
-    {sku:'LOG-022',name:'Étiquettes thermiques 100x150',qty:250,location:'Allée D - Étagère 1',category:'Consommable',threshold:20},
-    {sku:'LOG-023',name:'Boîte de rangement 30x20',qty:60,location:'Allée D - Étagère 2',category:'Stockage',threshold:5},
-    {sku:'LOG-024',name:'Bac gerbable 60x40',qty:40,location:'Allée D - Étagère 3',category:'Stockage',threshold:5},
-    {sku:'LOG-025',name:'Sangle arrimage 5m',qty:25,location:'Allée D - Étagère 4',category:'Matériel',threshold:3},
-    {sku:'LOG-026',name:'Cutter industriel',qty:18,location:'Allée D - Étagère 5',category:'Outillage',threshold:2},
-    {sku:'LOG-027',name:'Pistolet à colle thermique',qty:10,location:'Allée E - Étagère 1',category:'Outillage',threshold:2},
-    {sku:'LOG-028',name:'Bâton de colle thermique x50',qty:150,location:'Allée E - Étagère 1',category:'Outillage',threshold:20},
-    {sku:'LOG-029',name:'Ruban de signalisation jaune',qty:15,location:'Allée E - Étagère 2',category:'Sécurité',threshold:2},
-    {sku:'LOG-030',name:'Extincteur poudre 2kg',qty:0,location:'Allée E - Étagère 3',category:'Sécurité',threshold:1},
-    {sku:'MAT-001',name:'Bloc béton 33.19',qty:500,location:'Zone F - Rack 1',category:'Matériaux',threshold:50},
-    {sku:'MAT-002',name:'Bloc béton 19.19',qty:400,location:'Zone F - Rack 1',category:'Matériaux',threshold:50},
-    {sku:'MAT-003',name:'Bloc béton 14',qty:300,location:'Zone F - Rack 2',category:'Matériaux',threshold:30},
-    {sku:'MAT-006',name:'Brique Vandersanden baroque',qty:1000,location:'Zone G - Rack 1',category:'Matériaux',threshold:100},
-    {sku:'MAT-007',name:'Brique Vandersanden jaune',qty:800,location:'Zone G - Rack 1',category:'Matériaux',threshold:100},
-    {sku:'MAT-008',name:'Briques Terca 3 trous',qty:1200,location:'Zone G - Rack 2',category:'Matériaux',threshold:100},
-    {sku:'MAT-009',name:'Bloc béton 39.19.19',qty:300,location:'Zone F - Rack 3',category:'Matériaux',threshold:30},
-    {sku:'MAT-010',name:'Bloc béton 39.19.29',qty:250,location:'Zone F - Rack 3',category:'Matériaux',threshold:25},
-    {sku:'MAT-011',name:'Moellon',qty:600,location:'Zone G - Rack 3',category:'Matériaux',threshold:50},
-    {sku:'MAT-012',name:'Pré-linteaux 1m40',qty:150,location:'Zone F - Rack 5',category:'Matériaux',threshold:15}
-  ];
+  {sku:"PAP-001",name:"Papier blanc recyclé 80g/m² A4 2500f",qty:120,location:"Allee A - Etagere 1",category:"Papier et cahiers",threshold:10},
+  {sku:"PAP-002",name:"Notes Post-it 76x76mm recyclé 16blocs x 100f",qty:85,location:"Allee A - Etagere 1",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-003",name:"Bloc de cours A4 70g quadrille commercial 2 trous x20",qty:60,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-004",name:"Navigator Universal 80g A4 500f",qty:200,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:20},
+  {sku:"PAP-005",name:"Navigator Universal 80g A3 500f",qty:80,location:"Allee A - Etagere 2",category:"Papier et cahiers",threshold:10},
+  {sku:"PAP-006",name:"Clairefontaine 160g A4 250f",qty:50,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-007",name:"Clairefontaine 210g A4 250f",qty:50,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-008",name:"Clairefontaine 250g A4 125f",qty:30,location:"Allee A - Etagere 3",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-009",name:"Clairefontaine Trophee vert golf 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-010",name:"Clairefontaine Trophee jaune soleil 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-011",name:"Clairefontaine Trophee rose intense 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-012",name:"Clairefontaine Trophee rouge corail 80g A4 500f",qty:60,location:"Allee A - Etagere 4",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-013",name:"Clairefontaine Trophee turquoise 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-014",name:"Clairefontaine Trophee lilas 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-015",name:"Clairefontaine Trophee chamois 80g A4 500f",qty:60,location:"Allee A - Etagere 5",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-016",name:"Class'Ex bloc cours quadrille 5mm (1 piece)",qty:40,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-017",name:"Class'Ex bloc cours quadrille commercial (1 piece)",qty:40,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-018",name:"Cahier reliure spirale pages quadrillees couverture rigide",qty:35,location:"Allee A - Etagere 6",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-019",name:"Cahier de calligraphie 4 lignes A5 72 pages",qty:25,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:3},
+  {sku:"PAP-020",name:"Bloc tableau conference 68x95cm",qty:15,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:2},
+  {sku:"PAP-021",name:"Info Notes bloc memo jaune 40x50mm pack/12",qty:40,location:"Allee A - Etagere 7",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-022",name:"Info Notes bloc memo jaune 50x75mm pack/12",qty:40,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-023",name:"Info Notes bloc memo jaune 75x75mm pack/12",qty:40,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+  {sku:"PAP-024",name:"Info Notes bloc memo jaune 75x125mm pack/12",qty:30,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:3},
+  {sku:"PAP-025",name:"Z-notes recyclees",qty:30,location:"Allee A - Etagere 8",category:"Papier et cahiers",threshold:5},
+  {sku:"ECR-001",name:"Stylo bille BIC M10 boite 50 pieces",qty:100,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-002",name:"BIC M10 bleu 90+10 gratuits",qty:80,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-003",name:"Bic bille 4 couleurs moyen",qty:60,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-004",name:"Bic bille 3 couleurs + porte-mines",qty:40,location:"Allee B - Etagere 1",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-005",name:"Marqueur permanent Artline 70 noir boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-006",name:"Marqueur permanent Artline 70 bleu boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-007",name:"Marqueur permanent Artline 70 rouge boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-008",name:"Marqueur permanent Artline 70 vert boite/12",qty:30,location:"Allee B - Etagere 2",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-009",name:"Legamaster Boardmarker roller noir",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-010",name:"Legamaster Boardmarker roller bleu",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-011",name:"Legamaster Boardmarker roller rouge",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-012",name:"Legamaster Boardmarker roller vert",qty:50,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-013",name:"Legamaster Boardmarker roller pochette",qty:20,location:"Allee B - Etagere 3",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-014",name:"Staedtler surligneur jaune",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-015",name:"Staedtler surligneur rose",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-016",name:"Staedtler surligneur vert",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-017",name:"Staedtler surligneur bleu",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-018",name:"Staedtler surligneur orange",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-019",name:"Staedtler surligneur violet",qty:80,location:"Allee B - Etagere 4",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-020",name:"Staedtler etui 8 pieces",qty:30,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-021",name:"Staedtler etui 4 pieces",qty:30,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-022",name:"5 Star derouleur de correction",qty:40,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-023",name:"Gomme PVC 5 STAR",qty:60,location:"Allee B - Etagere 5",category:"Ecriture et correction",threshold:10},
+  {sku:"ECR-024",name:"5 Star crayon HB sans gomme boite/12",qty:40,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-025",name:"Staedtler taille-crayon metal 1 trou",qty:50,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-026",name:"Crayons de couleur triangulaire Coro'Peps",qty:25,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-027",name:"Feutre Roller Birello 12 couleurs",qty:25,location:"Allee B - Etagere 6",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-028",name:"EnerGel Pentel LR7-A 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-029",name:"EnerGel Pentel LR7-B 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-030",name:"EnerGel Pentel LR7-C 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-031",name:"EnerGel Pentel LR7-D 0.7mm recharge",qty:40,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:5},
+  {sku:"ECR-032",name:"EnerGel Pentel BL77-AO 0.7mm",qty:30,location:"Allee B - Etagere 7",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-033",name:"EnerGel Pentel BL77-BO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-034",name:"EnerGel Pentel BL77-CO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+  {sku:"ECR-035",name:"EnerGel Pentel BL77-DO 0.7mm",qty:30,location:"Allee B - Etagere 8",category:"Ecriture et correction",threshold:3},
+  {sku:"CLA-001",name:"Classeur a levier 2 anneaux carton A4 dos 8cm",qty:60,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:5},
+  {sku:"CLA-002",name:"Chemise presentation lamelles polypro A4 assorties x25",qty:40,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:5},
+  {sku:"CLA-003",name:"20 boites chemises ESSELTE 56066",qty:10,location:"Allee C - Etagere 1",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-004",name:"Fardes 3 rabats produit blanc x100",qty:5,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:1},
+  {sku:"CLA-005",name:"Pochettes perforees transparentes A4 80mu x100",qty:50,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:5},
+  {sku:"CLA-006",name:"Chemise A4 perf. ESSELTE 56066 pack/100",qty:30,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-007",name:"Chemise A4 ESSELTE 56218 pack/100",qty:30,location:"Allee C - Etagere 2",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-008",name:"Chemise classement avec fenetre colorees pack/100",qty:30,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-009",name:"Classeur carton marbre gris Pergamy dos 8cm",qty:40,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:5},
+  {sku:"CLA-010",name:"Classeur carton marbre gris Pergamy dos 5cm",qty:40,location:"Allee C - Etagere 3",category:"Classement et archivage",threshold:5},
+  {sku:"CLA-011",name:"Classeur LEITZ 180 deg dos 8cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-012",name:"Classeur LEITZ 180 deg dos 5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-013",name:"Classeur ESSELTE 7.5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-014",name:"Classeur ESSELTE 5cm",qty:30,location:"Allee C - Etagere 4",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-015",name:"Classeur Kangaro dos 8cm",qty:30,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-016",name:"Classeur Kangaro dos 5cm",qty:30,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-017",name:"Classeur Power N1 Vivida rouge boite/10",qty:10,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-018",name:"Classeur Power N1 Vivida vert boite/10",qty:10,location:"Allee C - Etagere 5",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-019",name:"Classeur Power N1 Vivida bleu boite/10",qty:10,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-020",name:"Classeur souple anneau dos 3.5cm cristal mat",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-021",name:"Classeur souple anneau dos 3.5cm pourpre",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-022",name:"Classeur souple CLASS'EX dos 2cm bleu",qty:20,location:"Allee C - Etagere 6",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-023",name:"Classeur souple CLASS'EX dos 2cm rouge",qty:20,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-024",name:"Fardes a devis Leitz VERT boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-025",name:"Fardes a devis Leitz ROUGE boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-026",name:"Fardes a devis Leitz BLEU boite/25",qty:15,location:"Allee C - Etagere 7",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-027",name:"Fardes a devis Leitz BLANC boite/25",qty:15,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-028",name:"Intercalaires Class Ex bleu pack/100",qty:20,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-029",name:"Intercalaires Class Ex cerise pack/100",qty:20,location:"Allee C - Etagere 8",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-030",name:"Intercalaires Class Ex vert pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-031",name:"Intercalaires Class Ex jaune pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-032",name:"Intercalaires Class Ex beige pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-033",name:"Intercalaires Class Ex rouge pack/100",qty:20,location:"Allee D - Etagere 1",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-034",name:"Boite archives 112636 CLASS'EX",qty:25,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-035",name:"Relieur D-Clip Bankers Box boite/100",qty:10,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-036",name:"D-clip MULTICOM boite/100 pattes archivage",qty:10,location:"Allee D - Etagere 2",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-037",name:"Porte-revue MAUL",qty:15,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-038",name:"Bacs a courrier Europost Vivida blanc",qty:12,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-039",name:"Etiquettes dos Leitz blanche ref 1640-00-01",qty:20,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-040",name:"Etiquettes dos Leitz blanche ref 1648-00-01",qty:20,location:"Allee D - Etagere 3",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-041",name:"Etiquettes dos Leitz blanche ref 1642-00-85",qty:20,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-042",name:"Etiquettes dos Leitz rouge emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-043",name:"Etiquettes dos Leitz bleu emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-044",name:"Etiquettes dos Leitz vert emb/10",qty:15,location:"Allee D - Etagere 4",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-045",name:"Feuille etiquette pleine page Pergamy",qty:30,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-046",name:"Feuille etiquette 21 etiquettes Pergamy",qty:30,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:3},
+  {sku:"CLA-047",name:"Pochettes plastification A4 100mu pack/100",qty:15,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:2},
+  {sku:"CLA-048",name:"Pochettes plastification A3 125mu pack/100",qty:10,location:"Allee D - Etagere 5",category:"Classement et archivage",threshold:2},
+  {sku:"MAT-001",name:"Perforateur ALU 65",qty:15,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-002",name:"Bostitch agrafeuse B8R noir",qty:12,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-003",name:"Agrafeuse long bras NOVUS B54/3",qty:8,location:"Allee E - Etagere 1",category:"Petit materiel de bureau",threshold:1},
+  {sku:"MAT-004",name:"5 Star agraphe boite/5000",qty:30,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-005",name:"Bostitch agrafe boite/5000",qty:30,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-006",name:"5 Star agrafes 24/6 galvanisees boite/1000",qty:20,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-007",name:"Agrafes NOVUS B54/3",qty:20,location:"Allee E - Etagere 2",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-008",name:"Desk'One ciseaux 16cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-009",name:"Desk'One ciseaux 18cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-010",name:"Desk'One ciseaux 21cm",qty:20,location:"Allee E - Etagere 3",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-011",name:"Cellfix papier collant 19mmx33m emb/8",qty:25,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-012",name:"Ruban adhesif PP transparent 50mmx66m",qty:20,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-013",name:"Tube de colle",qty:40,location:"Allee E - Etagere 4",category:"Petit materiel de bureau",threshold:5},
+  {sku:"MAT-014",name:"Punaises couleurs assorties 100 pieces",qty:30,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-015",name:"Punaises couleurs assorties 750 pieces",qty:15,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-016",name:"Aimant MAULsolid 15mm boite/10",qty:20,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-017",name:"Aimant MAULsolid 38mm boite/10",qty:15,location:"Allee E - Etagere 5",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-018",name:"Paquet 100 porte-cles plastique couleurs assorties",qty:10,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-019",name:"Bande Maul magnetique auto-adhesive 35mmx10m",qty:8,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:1},
+  {sku:"MAT-020",name:"Bande metallique souple Maul blanche 35mmx5m x2 rouleaux",qty:8,location:"Allee E - Etagere 6",category:"Petit materiel de bureau",threshold:1},
+  {sku:"MAT-021",name:"Latte plastique 30cm",qty:25,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-022",name:"Equerre geometrique transparente 16cm Gallery",qty:20,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:3},
+  {sku:"MAT-023",name:"Calculatrice Q Connect",qty:10,location:"Allee E - Etagere 7",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-024",name:"Calculatrice Olympio",qty:10,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-025",name:"Calculatrice Casio",qty:10,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:2},
+  {sku:"MAT-026",name:"Dahle cisaille a levier 561 A4 cap 35f",qty:5,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:1},
+  {sku:"MAT-027",name:"Compteuse de pieces CC202",qty:5,location:"Allee E - Etagere 8",category:"Petit materiel de bureau",threshold:1},
+  {sku:"CON-001",name:"DURACELL 9V",qty:30,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+  {sku:"CON-002",name:"Energizer pile Max 9V 6LR61 pack/1",qty:30,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+  {sku:"CON-003",name:"Pile AA LR6 alkaline pack/10",qty:50,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+  {sku:"CON-004",name:"Pile AAA LR03 alkaline pack/10",qty:50,location:"Allee F - Etagere 1",category:"Consommables et energie",threshold:5},
+  {sku:"CON-005",name:"Pile CR2032 lithium pack/5",qty:20,location:"Allee F - Etagere 2",category:"Consommables et energie",threshold:3},
+  {sku:"TAB-001",name:"Tableau blanc effacable 60x90cm",qty:5,location:"Allee G - Rack 1",category:"Tableaux et enseignement",threshold:1},
+  {sku:"TAB-002",name:"Tableau blanc effacable 90x120cm",qty:4,location:"Allee G - Rack 1",category:"Tableaux et enseignement",threshold:1},
+  {sku:"TAB-003",name:"Spray nettoyant tableau blanc 500ml",qty:15,location:"Allee G - Etagere 1",category:"Tableaux et enseignement",threshold:3},
+  {sku:"TAB-004",name:"Effaceur tableau Legamaster",qty:10,location:"Allee G - Etagere 1",category:"Tableaux et enseignement",threshold:2},
+  {sku:"TAB-005",name:"Compas scolaire metal pointe seche",qty:20,location:"Allee G - Etagere 2",category:"Tableaux et enseignement",threshold:3},
+  {sku:"TAB-006",name:"Rapporteur 180 deg transparent 10cm",qty:15,location:"Allee G - Etagere 2",category:"Tableaux et enseignement",threshold:3},
+  {sku:"MOB-001",name:"Bac rangement plastique gris 40x30x15cm",qty:10,location:"Zone H - Rack 1",category:"Mobilier et rangement",threshold:2},
+  {sku:"MOB-002",name:"Organiseur de bureau 5 compartiments noir",qty:8,location:"Zone H - Rack 1",category:"Mobilier et rangement",threshold:1},
+  {sku:"MOB-003",name:"Porte-stylos cylindrique noir",qty:12,location:"Zone H - Rack 2",category:"Mobilier et rangement",threshold:2},
+  {sku:"MOB-004",name:"Corbeille a papier 16L gris metallique",qty:6,location:"Zone H - Rack 2",category:"Mobilier et rangement",threshold:1}
+];
 }
 
 function defaultOrders() {
@@ -1492,6 +1656,7 @@ function addReceptionDemo(){
 // INIT
 // ============================================================
 loadFromStorage();
+initFirebase();
 if(!articles.length){ articles=defaultArticles(); persistData(); }
 if(!orders.length)  { orders=defaultOrders();    persistData(); }
 renderArticles(); renderOrders(); renderUrgentList(); updateStats();
