@@ -695,7 +695,8 @@ window.sendOrder=async function(){
       existing.push(cmd);
       localStorage.setItem('wms_commandes',JSON.stringify(existing));
     }
-    // Signal urgent ping for wms.html
+    // Signal new order ping for wms.html (all modes)
+    localStorage.setItem('wms_new_order_ping','1');
     if(selectedMode==='Urgent'){
       localStorage.setItem('wms_urgent_ping','1');
       playUrgent();
