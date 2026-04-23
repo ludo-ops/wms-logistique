@@ -682,24 +682,47 @@ window.openAddArticleForm = function(){
 };
 
 window.saveNewArticle = async function(){
-  const nom = document.getElementById('add-article-nom').value.trim();
-  const ref = document.getElementById('add-article-ref').value.trim().toUpperCase();
-  const cat = document.getElementById('add-article-cat').value.trim();
-  const prix = parseFloat(document.getElementById('add-article-prix').value || '0');
-  const stock = parseInt(document.getElementById('add-article-stock').value || '0', 10);
+  // 1. On récupère les bonnes cases avec les bons noms
+  const nom = document.getElementById('add-nom').value.trim();
+  const ref = document.getElementById('add-ref').value.trim().toUpperCase();
+  const cat = document.getElementById('add-cat').value.trim();
+  const prix = parseFloat(document.getElementById('add-prix').value || '0');
+  const stock = parseInt(document.getElementById('add-stock').value || '0', 10);
 
-  if(!nom || !ref || !cat || !prix){
-    showToast('Remplis tous les champs', 'error');
+  // 2. On vérifie que les champs obligatoires ne sont pas vides
+  if(!nom || !ref || !cat){
+    showToast('Veuillez remplir le nom, la réf et la catégorie', 'error');
     return;
   }
 
-  await addDoc(collection(db, 'articles'), {
-    nom, ref, cat, prix, stock,
-    createdAt: serverTimestamp()
-  });
+  // 3. On envoie tout à Firebase
+  try {
+    await addDoc(collection(db, 'articles'), {
+      nom: nom,
+      ref: ref,
+      cat: cat,
+      prix: prix,
+      stock: stock,
+      createdAt: serverTimestamp()
+    });
 
-  closeModal('modal-add-article');
-  showToast('Article ajouté', 'success');
+    // 4. On ferme la fenêtre et on affiche un succès
+    if(typeof closeAddArticleForm === 'function') {
+        closeAddArticleForm(); // Ferme la petite fenêtre d'ajout
+    }
+    showToast('Article ajouté avec succès !', 'success');
+
+    // On vide les cases pour le prochain article
+    document.getElementById('add-nom').value = '';
+    document.getElementById('add-ref').value = '';
+    document.getElementById('add-cat').value = '';
+    document.getElementById('add-prix').value = '';
+    document.getElementById('add-stock').value = '';
+
+  } catch(error) {
+    console.error("Erreur d'ajout Firebase:", error);
+    showToast("Erreur lors de l'enregistrement", 'error');
+  }
 };
 
 // ══ COMMANDES ══
