@@ -890,7 +890,7 @@ function showFeedback(cmd,elapsed){
 
 window.viewCommande=function(id){
   const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
-  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${a.qte}</td><td>${a.scanned||0}</td></tr>`).join('');
+  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${Number(a.qte ?? a.qty ?? 0)}</td><td>${a.scanned||0}</td></tr>`).join('');
   document.getElementById('modal-cmd-body').innerHTML=`
     <div class="feedback-box" style="margin-bottom:1rem">
       <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
@@ -912,7 +912,7 @@ window.viewCommande=function(id){
 
 window.openPrint=function(id){
   const cmd=allCommandes.find(c=>c.id===id); if(!cmd)return;
-  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${a.qte}</td></tr>`).join('');
+  const rows=cmd.articles.map(a=>`<tr><td>${a.nom}</td><td>${a.ref}</td><td>${Number(a.qte ?? a.qty ?? 0)}</td></tr>`).join('');
   document.getElementById('print-content').innerHTML=`
     <div style="font-family:monospace;font-size:.85rem;background:#fff;color:#000;padding:1rem;border-radius:8px">
       <h2 style="text-align:center;border-bottom:2px solid #000;padding-bottom:.5rem">FICHE D'EXPÉDITION</h2>
@@ -1312,7 +1312,7 @@ function updateCamIndicator(status,msg){
 
 window.simulateScan=function(){
   if(!scanOrderData){ showToast('Sélectionnez une commande d\'abord','warn'); return; }
-  const pending=scanOrderData.articles.filter(a=>a.scanned<a.qte);
+  const pending=scanOrderData.articles.filter(a=>a.scanned<Number(a.qte ?? a.qty ?? 0));
   if(!pending.length){ showToast('Tous les articles sont déjà scannés !','info'); return; }
   const art=pending[Math.floor(Math.random()*pending.length)];
   art.scanned=(art.scanned||0)+1;
@@ -1334,34 +1334,35 @@ function populateScanSelect(){
 window.loadScanOrder=function(){
   const id=document.getElementById('scan-order-select').value;
   if(!id){ scanOrderData=null; document.getElementById('scan-order-info').innerHTML='<div class="empty-state"><div class="es-icon">📦</div><p>Sélectionnez une commande</p></div>'; document.getElementById('scan-progress-wrap').style.display='none'; document.getElementById('scan-items-list').innerHTML=''; return; }
-  const cmd=allCommandes.find(c=>c.id===id);
-  if(!cmd)return;
-  scanOrderData=JSON.parse(JSON.stringify(cmd));// deep copy
-  document.getElementById('scan-order-info').innerHTML=`
-    <div class="feedback-box" style="margin-bottom:.75rem">
-      <div class="feedback-stat"><span>Ref</span><span class="feedback-val">${cmd.ref}</span></div>
-      <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
-      <div class="feedback-stat"><span>Mode</span><span>${cmd.mode}</span></div>
-    </div>`;
-  document.getElementById('scan-progress-wrap').style.display='block';
-  updateScanProgress();
+const cmd=allCommandes.find(c=>c.id===id);
+if(!cmd)return;
+scanOrderData=JSON.parse(JSON.stringify(cmd));// deep copy
+document.getElementById('scan-order-info').innerHTML=`
+  <div class="feedback-box" style="margin-bottom:.75rem">
+    <div class="feedback-stat"><span>Ref</span><span class="feedback-val">${cmd.ref}</span></div>
+    <div class="feedback-stat"><span>Client</span><span>${cmd.client}</span></div>
+    <div class="feedback-stat"><span>Mode</span><span>${cmd.mode}</span></div>
+  </div>`;
+document.getElementById('scan-progress-wrap').style.display='block';
+updateScanProgress();
 };
 
 function updateScanProgress(){
   if(!scanOrderData)return;
   const arts=scanOrderData.articles;
-  const totalQte=arts.reduce((s,a)=>s+a.qte,0);
-  const scannedQte=arts.reduce((s,a)=>s+(a.scanned||0),0);
+  const totalQte=arts.reduce((s,a)=>s+Number(a.qte ?? a.qty ?? 0),0);
+  const scannedQte=arts.reduce((s,a)=>s+Number(a.scanned ?? 0),0);
   const pct=totalQte>0?Math.round(scannedQte/totalQte*100):0;
   document.getElementById('scan-pct').textContent=pct+'%';
   document.getElementById('scan-progress-fill').style.width=pct+'%';
   const list=document.getElementById('scan-items-list');
   list.innerHTML=arts.map(a=>{
-    const done=(a.scanned||0)>=a.qte;
-    const partial=(a.scanned||0)>0&&!done;
+    const qte=Number(a.qte ?? a.qty ?? 0);
+    const done=Number(a.scanned ?? 0)>=qte;
+    const partial=Number(a.scanned ?? 0)>0&&!done;
     return `<div class="scan-item-row ${done?'done':partial?'partial':'pending'}">
       <span style="font-size:.8rem">${done?'✅':partial?'🔶':'⬜'} ${a.nom}</span>
-      <span style="font-family:var(--font-mono);font-size:.8rem">${a.scanned||0}/${a.qte}</span>
+      <span style="font-family:var(--font-mono);font-size:.8rem">${a.scanned||0}/${qte}</span>
     </div>`;
   }).join('');
   const btn=document.getElementById('btn-validate-scan');
@@ -1372,11 +1373,10 @@ function updateScanProgress(){
     playSuccess();
   } else btn.style.display='none';
 }
-
 async function saveScanProgress(){
   if(!scanOrderData)return;
   const arts=scanOrderData.articles;
-  const totalQte=arts.reduce((s,a)=>s+a.qte,0);
+  const totalQte=arts.reduce((s,a)=>s+Number(a.qte ?? a.qty ?? 0),0);
   const scannedQte=arts.reduce((s,a)=>s+(a.scanned||0),0);
   const pct=Math.round(scannedQte/totalQte*100);
   await updateCommande(scanOrderData.id,{articles:arts,progress:pct,status:'en-cours',startedAt:scanOrderData.startedAt||Date.now()});
