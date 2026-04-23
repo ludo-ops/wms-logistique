@@ -401,14 +401,14 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// ══ Firebase config ══ (même config que wms.html)
+// ══ Firebase config ══ 
 const firebaseConfig = {
-  apiKey: "VOTRE_API_KEY",
-  authDomain: "VOTRE_PROJECT.firebaseapp.com",
-  projectId: "VOTRE_PROJECT_ID",
-  storageBucket: "VOTRE_PROJECT.appspot.com",
-  messagingSenderId: "VOTRE_SENDER_ID",
-  appId: "VOTRE_APP_ID"
+  apiKey: "AIzaSyAEzGevzxFCDBDcAAISqY4UQpYQNOWCYFo",
+  authDomain: "wms-logistique.firebaseapp.com",
+  projectId: "wms-logistique",
+  storageBucket: "wms-logistique.firebasestorage.app",
+  messagingSenderId: "34951077064",
+  appId: "1:34951077064:web:e6c2633e4a59bae8f1d9fd"
 };
 
 let db, useFirebase = false;
@@ -416,33 +416,34 @@ try {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   useFirebase = true;
-} catch(e) { console.warn('Firebase indispo, mode localStorage'); }
+  console.log("✅ Firebase connecté sur demande.html !");
+} catch(e) { 
+  console.warn('Firebase indispo, mode localStorage'); 
+}
 
 // ══ ARTICLES depuis Firebase ══
 let ARTICLES = [];
 if (useFirebase) {
-  // J'ai enlevé le "orderBy" pour être certain que Firebase ne bloque pas l'affichage
+  // On récupère les articles sans le tri complexe pour éviter les erreurs d'index
   onSnapshot(collection(db, 'articles'), function(snap) {
     
-    // 1. On récupère les articles depuis Firebase
+    // 1. On récupère les données
     ARTICLES = snap.docs.map(function(d) {
       return Object.assign({id: d.id}, d.data());
     });
     
-    // 2. TRÈS IMPORTANT : On remplit la liste qui gère l'affichage à l'écran
+    // 2. On met à jour la liste pour l'écran
     filteredArticles = [...ARTICLES];
     
-    // 3. On crée les boutons de catégories (Papier, Écriture, etc.)
+    // 3. On met à jour les boutons de catégories
     if (typeof initCats === 'function') initCats();
     
-    // 4. On lance la BONNE fonction d'affichage
+    // 4. On dessine les articles sur la page
     if (typeof renderArticles === 'function') renderArticles();
     
   }, function(error) {
-    console.error("Erreur avec Firebase :", error);
+    console.error("Erreur de chargement Firebase:", error);
   });
-} else {
-  ARTICLES = [];
 }
 
 // ══ State ══
