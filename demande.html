@@ -423,23 +423,27 @@ try {
 // ══ ARTICLES depuis Firebase ══
 let ARTICLES = [];
 if (useFirebase) {
+  // Note : Si rien ne s'affiche, regarde la console (F12) pour cliquer sur le lien d'index Firebase
   onSnapshot(query(collection(db, 'articles'), orderBy('cat'), orderBy('nom')), function(snap) {
-    // 1. On récupère les articles depuis Firebase
+    // 1. On récupère les données
     ARTICLES = snap.docs.map(function(d) {
       return Object.assign({id: d.id}, d.data());
     });
     
-    // 2. On met à jour la liste utilisée pour l'affichage
+    // 2. IMPORTANT : On met à jour la liste filtrée
     filteredArticles = [...ARTICLES];
     
-    // 3. On met à jour les boutons de catégories en haut
-    if(typeof initCats === 'function') initCats();
+    // 3. On met à jour les boutons de catégories
+    if (typeof initCats === 'function') initCats();
     
-    // 4. On affiche enfin les articles !
-    if(typeof renderArticles === 'function') renderArticles();
+    // 4. On lance la BONNE fonction d'affichage
+    if (typeof renderArticles === 'function') renderArticles();
+    
+    console.log("Articles synchronisés :", ARTICLES.length);
+  }, (error) => {
+    console.error("Erreur Firebase (Index ?) :", error);
   });
 }
-
 
 // ══ State ══
 let cart = {}; // {id: qty}
