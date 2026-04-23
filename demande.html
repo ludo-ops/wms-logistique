@@ -556,7 +556,7 @@ window.changeQty=function(id,delta,e){
 };
 
 function updateCartBar(){
-  const items=Object.entries(cart).map(([id,qty])=>({...ARTICLES.find(a=>a.id===id),qty}));
+  const items=Object.entries(cart).map(([id,qty])=>({...ARTICLES.find(a=>  a.id===id),qte:qty,scanned:0}));
   const total=items.reduce((s,i)=>s+i.prix*i.qty,0);
   const count=items.reduce((s,i)=>s+i.qty,0);
   document.getElementById('cart-count').textContent=count+' article'+(count>1?'s':'');
