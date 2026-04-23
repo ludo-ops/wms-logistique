@@ -429,7 +429,11 @@ if (useFirebase) {
     
     // 1. On récupère les données
     ARTICLES = snap.docs.map(function(d) {
-      return Object.assign({id: d.id}, d.data());
+      const data = d.data();
+      return Object.assign({id: d.id}, data, {
+        prix: parseFloat(data.prix) || 0,
+        stock: parseInt(data.stock) || 0
+      });
     });
     
     // 2. On met à jour la liste pour l'écran
@@ -457,7 +461,7 @@ let currentCat = '';
 
 // ══ Helpers ══
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6).toUpperCase(); }
-function fmtEur(v){ return v.toFixed(2).replace('.',',')+' €'; }
+function fmtEur(v){ const n=parseFloat(v); return isNaN(n)?'—':n.toFixed(2).replace('.',',')+' €'; }
 
 function showToast(msg, type='info', dur=3500){
   const c=document.getElementById('toast-container');
