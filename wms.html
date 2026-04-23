@@ -607,63 +607,19 @@ let DATA = {
 };
 function saveLocal(key){ localStorage.setItem('wms_'+key, JSON.stringify(DATA[key])); }
 
-// ══ Articles catalogue ══
-const ARTICLES = [
-  // Papier / cahiers
-  {id:'ART001',nom:'Ramette papier A4 80g',ref:'PAP-A4-80',cat:'Papier',prix:4.99,stock:200},
-  {id:'ART002',nom:'Ramette papier A3 80g',ref:'PAP-A3-80',cat:'Papier',prix:8.99,stock:80},
-  {id:'ART003',nom:'Cahier grands carreaux 96p A4',ref:'CAH-GC96',cat:'Cahiers',prix:2.49,stock:150},
-  {id:'ART004',nom:'Cahier petits carreaux 96p A4',ref:'CAH-PC96',cat:'Cahiers',prix:2.49,stock:120},
-  {id:'ART005',nom:'Cahier spirale A5 200p',ref:'CAH-SPA5',cat:'Cahiers',prix:3.99,stock:90},
-  {id:'ART006',nom:'Bloc-notes A5 repositionnable',ref:'BLO-A5R',cat:'Cahiers',prix:3.29,stock:60},
-  // Écriture
-  {id:'ART010',nom:'Stylo bille bleu BIC',ref:'STY-BIC-BL',cat:'Ecriture',prix:0.49,stock:500},
-  {id:'ART011',nom:'Stylo bille noir BIC',ref:'STY-BIC-NO',cat:'Ecriture',prix:0.49,stock:480},
-  {id:'ART012',nom:'Stylo roller gel 0.5mm',ref:'STY-ROL05',cat:'Ecriture',prix:1.99,stock:200},
-  {id:'ART013',nom:'Feutre pointe fine noir',ref:'FEU-FIN-NO',cat:'Ecriture',prix:1.29,stock:150},
-  {id:'ART014',nom:'Surligneur jaune',ref:'SUR-JAU',cat:'Ecriture',prix:0.99,stock:300},
-  {id:'ART015',nom:'Surligneur rose',ref:'SUR-ROS',cat:'Ecriture',prix:0.99,stock:250},
-  {id:'ART016',nom:'Crayon HB (boîte 12)',ref:'CRA-HB12',cat:'Ecriture',prix:2.99,stock:120},
-  {id:'ART017',nom:'Gomme blanche',ref:'GOM-BLA',cat:'Ecriture',prix:0.39,stock:400},
-  {id:'ART018',nom:'Taille-crayon métal',ref:'TAI-MET',cat:'Ecriture',prix:0.99,stock:180},
-  // Classement
-  {id:'ART020',nom:'Classeur A4 dos 8cm rouge',ref:'CLA-A4-8R',cat:'Classement',prix:3.99,stock:100},
-  {id:'ART021',nom:'Classeur A4 dos 8cm bleu',ref:'CLA-A4-8B',cat:'Classement',prix:3.99,stock:100},
-  {id:'ART022',nom:'Intercalaires A4 (jeu 12)',ref:'INT-A4-12',cat:'Classement',prix:2.49,stock:200},
-  {id:'ART023',nom:'Chemise cartonnée A4 bleu',ref:'CHE-A4-BL',cat:'Classement',prix:0.79,stock:300},
-  {id:'ART024',nom:'Pochette plastique perforée (100)',ref:'POC-PER100',cat:'Classement',prix:4.99,stock:80},
-  {id:'ART025',nom:'Boîte archive carton',ref:'BOI-ARC',cat:'Classement',prix:2.29,stock:150},
-  {id:'ART026',nom:'Étiquettes adhésives blanches A4 (25f)',ref:'ETI-A4-25',cat:'Classement',prix:6.99,stock:60},
-  // Petit matériel
-  {id:'ART030',nom:'Agrafeuse 26/6 bureau',ref:'AGR-26-6',cat:'Petit materiel',prix:7.99,stock:50},
-  {id:'ART031',nom:'Agrafes 26/6 (boîte 1000)',ref:'AGR-BTE1K',cat:'Petit materiel',prix:1.99,stock:200},
-  {id:'ART032',nom:'Perforatrice 2 trous',ref:'PER-2T',cat:'Petit materiel',prix:8.99,stock:40},
-  {id:'ART033',nom:'Cutter A3 lame 18mm',ref:'CUT-A3',cat:'Petit materiel',prix:4.49,stock:80},
-  {id:'ART034',nom:'Ciseaux 21cm acier inox',ref:'CIS-21',cat:'Petit materiel',prix:5.99,stock:60},
-  {id:'ART035',nom:'Scotch transparent 19mm (lot 3)',ref:'SCO-TRA19',cat:'Petit materiel',prix:3.49,stock:150},
-  {id:'ART036',nom:'Colle en bâton 21g',ref:'COL-BAT21',cat:'Petit materiel',prix:1.29,stock:200},
-  {id:'ART037',nom:'Trombone acier (boîte 100)',ref:'TRO-ACB100',cat:'Petit materiel',prix:1.49,stock:180},
-  {id:'ART038',nom:'Punaises acier (boîte 100)',ref:'PUN-ACB100',cat:'Petit materiel',prix:1.99,stock:120},
-  {id:'ART039',nom:'Règle 30cm plastique',ref:'REG-30P',cat:'Petit materiel',prix:0.99,stock:200},
-  // Consommables
-  {id:'ART040',nom:'Cartouche HP 302 noire',ref:'HP302-NO',cat:'Consommables',prix:14.99,stock:30},
-  {id:'ART041',nom:'Cartouche HP 302 couleurs',ref:'HP302-COL',cat:'Consommables',prix:16.99,stock:25},
-  {id:'ART042',nom:'Toner Brother TN-2420',ref:'TN2420',cat:'Consommables',prix:29.99,stock:20},
-  {id:'ART043',nom:'Ruban correcteur 4.2mm',ref:'RUB-COR42',cat:'Consommables',prix:2.99,stock:100},
-  {id:'ART044',nom:'Piles AA (pack 4)',ref:'PIL-AA4',cat:'Consommables',prix:3.99,stock:80},
-  {id:'ART045',nom:'Piles AAA (pack 4)',ref:'PIL-AAA4',cat:'Consommables',prix:3.49,stock:80},
-  // Tableaux
-  {id:'ART050',nom:'Tableau blanc magnétique 90x60',ref:'TAB-BL9060',cat:'Tableaux',prix:39.99,stock:10},
-  {id:'ART051',nom:'Tableau chevalet papier conférence',ref:'TAB-CHE',cat:'Tableaux',prix:49.99,stock:8},
-  {id:'ART052',nom:'Marqueur effaçable rouge',ref:'MAR-EFF-R',cat:'Tableaux',prix:1.99,stock:60},
-  {id:'ART053',nom:'Marqueur effaçable bleu',ref:'MAR-EFF-B',cat:'Tableaux',prix:1.99,stock:60},
-  {id:'ART054',nom:'Effaceur tableau magnétique',ref:'EFF-MAG',cat:'Tableaux',prix:3.49,stock:40},
-  // Mobilier
-  {id:'ART060',nom:'Chaise de bureau réglable',ref:'CHR-BUR',cat:'Mobilier',prix:149.99,stock:5},
-  {id:'ART061',nom:'Bureau informatique 120cm',ref:'BUR-120',cat:'Mobilier',prix:199.99,stock:3},
-  {id:'ART062',nom:'Étagère métal 5 niveaux',ref:'ETA-MET5',cat:'Mobilier',prix:89.99,stock:6},
-  {id:'ART063',nom:'Caisson bureau 3 tiroirs',ref:'CAI-3T',cat:'Mobilier',prix:129.99,stock:4},
-];
+// ══ Articles catalogue depuis Firebase ══
+let ARTICLES = [];
+
+if (useFirebase) {
+    onSnapshot(collection(db, 'articles'), (snapshot) => {
+        ARTICLES = [];
+        snapshot.forEach((doc) => {
+            ARTICLES.push({ id: doc.id, ...doc.data() });
+        });
+        // Si la fonction d'affichage existe, on met à jour la page
+        if(typeof window.loadArticlesWMS === "function") window.loadArticlesWMS();
+    });
+}
 
 const CLIENTS = ['Entreprise Dupont','Mairie de Lyon','École Pasteur','Cabinet Martin','Société Renard','Atelier Leblanc','Centre Médical Duval','Clinique Saint-Luc','Lycée Jules Ferry','Association Vert Espoir','Hôtel Bristol','Restaurant Le Coin','Pharmacie Centrale','Cabinet Juridique Noir','Agence Immobilière Sud'];
 const RESPONSABLES = ['Alice Martin','Bob Leroy','Claire Dubois','David Moreau','Emma Bernard','François Petit','Gaëlle Simon','Hugo Fournier'];
@@ -1075,8 +1031,7 @@ window.generateDemoReceptions=async function(){
   loadData(); showToast('10 réceptions générées','success');
 };
 
-function renderReceptions(){
-function loadArticlesWMS(){
+window.loadArticlesWMS = function(){
   const c = document.getElementById('articlesWMSContainer');
   if(!c) return;
 
@@ -1101,6 +1056,8 @@ function loadArticlesWMS(){
     `;
   }).join('');
 }
+
+function renderReceptions(){
   const tbody=document.getElementById('tbody-receptions');
   tbody.innerHTML=''; document.getElementById('cnt-reception').textContent=allReceptions.length;
   if(!allReceptions.length){ tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="es-icon">🚚</div><p>Aucune réception</p></div></td></tr>`; return; }
