@@ -424,7 +424,7 @@ try {
 let ARTICLES = [];
 if (useFirebase) {
   // Note : Si rien ne s'affiche, regarde la console (F12) pour cliquer sur le lien d'index Firebase
-  onSnapshot(query(collection(db, 'articles'), orderBy('cat'), orderBy('nom')), function(snap) {
+  onSnapshot(collection(db, 'articles'), function(snap) {
     // 1. On récupère les données
     ARTICLES = snap.docs.map(function(d) {
       return Object.assign({id: d.id}, d.data());
