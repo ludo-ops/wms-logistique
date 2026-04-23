@@ -340,13 +340,13 @@ tr:hover td{background:rgba(255,255,255,.02);}
   <!-- ─ SCAN / PREP ─ -->
   <div class="section" id="section-scan">
     <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem;">
-  <label style="font-size:.8rem;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:.4rem;">👤 Ton nom avant de scanner</label>
-  <input id="input-responsable-scan" type="text" placeholder="Prénom Nom"
-    style="width:100%;padding:.6rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#fff;font-size:.9rem;box-sizing:border-box;"
-    oninput="document.getElementById('resp-label').textContent=this.value?'✅ Responsable : '+this.value:''">
-  <div id="resp-label" style="margin-top:.35rem;font-size:.8rem;color:var(--green);font-weight:600;"></div>
-</div>
-<div class="scan-layout">
+      <label style="font-size:.8rem;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:.4rem;">👤 Ton nom avant de scanner</label>
+      <input id="input-responsable-scan" type="text" placeholder="Prénom Nom"
+        style="width:100%;padding:.6rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#fff;font-size:.9rem;box-sizing:border-box;"
+        oninput="document.getElementById('resp-label').textContent=this.value?'✅ '+this.value:''">
+      <div id="resp-label" style="margin-top:.35rem;font-size:.8rem;color:var(--green);font-weight:600;"></div>
+    </div>
+    <div class="scan-layout">
       <div class="scan-panel">
         <h3>📷 Scanner d'articles</h3>
         <label class="form-group">
@@ -454,7 +454,35 @@ tr:hover td{background:rgba(255,255,255,.02);}
     </div>
   </div>
 
+
+
+  <!-- ─ ARTICLES ─ -->
+  <div class="section" id="section-articles">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.5rem;">
+      <h2 style="margin:0;">📋 Catalogue Articles</h2>
+      <input type="text" placeholder="🔍 Rechercher un article..."
+        oninput="filterArticlesWMS(this.value)"
+        style="padding:.5rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#fff;width:260px;">
+    </div>
+    <div id="articlesWMSContainer"></div>
+  </div>
+
 </div><!-- /main -->
+
+<!-- Modale zoom QR/Barcode -->
+<div id="modalZoom" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:2rem;max-width:480px;width:90%;text-align:center;">
+    <div id="modalZoomTitle" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem;color:#fff;"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;">
+      <div id="modalQR"></div>
+      <svg id="modalBarcode" style="max-width:100%;"></svg>
+    </div>
+    <button onclick="window.closeZoomModal()"
+      style="margin-top:1.5rem;padding:.6rem 1.5rem;background:var(--accent);border:none;border-radius:8px;cursor:pointer;font-weight:700;color:#000;">
+      ✕ Fermer
+    </button>
+  </div>
+</div>
 
 <!-- ══ MODALS ═══════════════════════════════════════ -->
 
@@ -791,9 +819,14 @@ window.purgeCommandes=async function(){
 
 window.startCommande=async function(id){
   const nom=(document.getElementById('input-responsable-scan')?.value||'').trim();
-  if(!nom){ showToast('⚠️ Entre ton nom dans l\'onglet Scan avant de démarrer','error'); switchTab('scan'); return; }
+  if(!nom){
+    showToast('⚠️ Va dans l\'onglet Scan et entre ton nom d\'abord','error');
+    window.switchTab('scan');
+    return;
+  }
   await updateCommande(id,{status:'en-cours',responsable:nom});
-  showToast('Commande démarrée — Responsable : '+nom,'info'); loadData();
+  showToast('Commande démarrée — Responsable : '+nom,'info');
+  loadData();
 };
 
 window.openValidate=function(id){
@@ -1188,6 +1221,17 @@ window.showProgress=function(){
   showToast('Fonctionnalité suivi élèves — à connecter au module formation','info');
 };
 
+window.switchTab = switchTab;
+window.filterCommandes = filterCommandes;
+window.filterCommandeStatus = filterCommandeStatus;
+window.filterCommandeMode = filterCommandeMode;
+window.generateDemoCommandes = generateDemoCommandes;
+window.purgeCommandes = purgeCommandes;
+window.generateDemoRetours = generateDemoRetours;
+window.generateDemoReceptions = generateDemoReceptions;
+window.viewCommande = viewCommande;
+window.openValidate = openValidate;
+
 // ══ SCAN / Camera ══
 let cameraStream=null, scanOrderData=null, scanSimInterval=null;
 
@@ -1314,21 +1358,21 @@ window.validateScanOrder=async function(){
 };
 
 // ══ Données ══
-async let _snapshotListening=false;
+let _fbListening=false;
 async function loadData(){
   if(useFirebase){
-    if(_snapshotListening) return;
-    _snapshotListening=true;
+    if(_fbListening) return;
+    _fbListening=true;
     try{
-      onSnapshot(query(collection(db,'commandes'),orderBy('createdAt','desc')),snap=>{
+      onSnapshot(query(collection(db,'commandes'),orderBy('createdAt','desc')), snap=>{
         allCommandes=snap.docs.map(d=>({id:d.id,...d.data()}));
         renderCommandes(); checkUrgentNotif(); populateScanSelect();
       });
-      onSnapshot(collection(db,'retours'),snap=>{
+      onSnapshot(collection(db,'retours'), snap=>{
         allRetours=snap.docs.map(d=>({id:d.id,...d.data()}));
         renderRetours();
       });
-      onSnapshot(collection(db,'receptions'),snap=>{
+      onSnapshot(collection(db,'receptions'), snap=>{
         allReceptions=snap.docs.map(d=>({id:d.id,...d.data()}));
         renderReceptions();
       });
@@ -1386,9 +1430,10 @@ function restoreScenarioState(){
     const m=localStorage.getItem('wms_urgent_ping');
     if(m){ localStorage.removeItem('wms_urgent_ping'); playUrgent(); showToast('🚨 Nouvelle commande urgente reçue !','error',6000); loadData(); }
   },2000);
-})();
 
-// ══ ONGLET ARTICLES ══
+// ══════════════════════════════════════════════════════
+//  ONGLET ARTICLES
+// ══════════════════════════════════════════════════════
 const ARTICLES_WMS=[
   {id:'ART001',nom:'Ramette papier A4 80g',ref:'PAP-A4-80',cat:'Papier',prix:4.99,stock:200},
   {id:'ART002',nom:'Ramette papier A3 80g',ref:'PAP-A3-80',cat:'Papier',prix:8.99,stock:80},
@@ -1396,32 +1441,32 @@ const ARTICLES_WMS=[
   {id:'ART004',nom:'Cahier petits carreaux 96p A4',ref:'CAH-PC96',cat:'Cahiers',prix:2.49,stock:120},
   {id:'ART005',nom:'Cahier spirale A5 200p',ref:'CAH-SPA5',cat:'Cahiers',prix:3.99,stock:90},
   {id:'ART006',nom:'Bloc-notes A5 repositionnable',ref:'BLO-A5R',cat:'Cahiers',prix:3.29,stock:60},
-  {id:'ART010',nom:'Stylo bille bleu BIC',ref:'STY-BIC-BL',cat:'Écriture',prix:0.49,stock:500},
-  {id:'ART011',nom:'Stylo bille noir BIC',ref:'STY-BIC-NO',cat:'Écriture',prix:0.49,stock:480},
-  {id:'ART012',nom:'Stylo roller gel 0.5mm',ref:'STY-ROL05',cat:'Écriture',prix:1.99,stock:200},
-  {id:'ART013',nom:'Feutre pointe fine noir',ref:'FEU-FIN-NO',cat:'Écriture',prix:1.29,stock:150},
-  {id:'ART014',nom:'Surligneur jaune',ref:'SUR-JAU',cat:'Écriture',prix:0.99,stock:300},
-  {id:'ART015',nom:'Surligneur rose',ref:'SUR-ROS',cat:'Écriture',prix:0.99,stock:250},
-  {id:'ART016',nom:'Crayon HB (boîte 12)',ref:'CRA-HB12',cat:'Écriture',prix:2.99,stock:120},
-  {id:'ART017',nom:'Gomme blanche',ref:'GOM-BLA',cat:'Écriture',prix:0.39,stock:400},
-  {id:'ART018',nom:'Taille-crayon métal',ref:'TAI-MET',cat:'Écriture',prix:0.99,stock:180},
+  {id:'ART010',nom:'Stylo bille bleu BIC',ref:'STY-BIC-BL',cat:'Ecriture',prix:0.49,stock:500},
+  {id:'ART011',nom:'Stylo bille noir BIC',ref:'STY-BIC-NO',cat:'Ecriture',prix:0.49,stock:480},
+  {id:'ART012',nom:'Stylo roller gel 0.5mm',ref:'STY-ROL05',cat:'Ecriture',prix:1.99,stock:200},
+  {id:'ART013',nom:'Feutre pointe fine noir',ref:'FEU-FIN-NO',cat:'Ecriture',prix:1.29,stock:150},
+  {id:'ART014',nom:'Surligneur jaune',ref:'SUR-JAU',cat:'Ecriture',prix:0.99,stock:300},
+  {id:'ART015',nom:'Surligneur rose',ref:'SUR-ROS',cat:'Ecriture',prix:0.99,stock:250},
+  {id:'ART016',nom:'Crayon HB (boite 12)',ref:'CRA-HB12',cat:'Ecriture',prix:2.99,stock:120},
+  {id:'ART017',nom:'Gomme blanche',ref:'GOM-BLA',cat:'Ecriture',prix:0.39,stock:400},
+  {id:'ART018',nom:'Taille-crayon metal',ref:'TAI-MET',cat:'Ecriture',prix:0.99,stock:180},
   {id:'ART020',nom:'Classeur A4 dos 8cm rouge',ref:'CLA-A4-8R',cat:'Classement',prix:3.99,stock:100},
   {id:'ART021',nom:'Classeur A4 dos 8cm bleu',ref:'CLA-A4-8B',cat:'Classement',prix:3.99,stock:100},
   {id:'ART022',nom:'Intercalaires A4 (jeu 12)',ref:'INT-A4-12',cat:'Classement',prix:2.49,stock:200},
-  {id:'ART023',nom:'Chemise cartonnée A4 bleu',ref:'CHE-A4-BL',cat:'Classement',prix:0.79,stock:300},
-  {id:'ART024',nom:'Pochette plastique perforée (100)',ref:'POC-PER100',cat:'Classement',prix:4.99,stock:80},
-  {id:'ART025',nom:'Boîte archive carton',ref:'BOI-ARC',cat:'Classement',prix:2.29,stock:150},
-  {id:'ART026',nom:'Étiquettes adhésives blanches A4 (25f)',ref:'ETI-A4-25',cat:'Classement',prix:6.99,stock:60},
-  {id:'ART030',nom:'Agrafeuse 26/6 bureau',ref:'AGR-26-6',cat:'Petit matériel',prix:7.99,stock:50},
-  {id:'ART031',nom:'Agrafes 26/6 (boîte 1000)',ref:'AGR-BTE1K',cat:'Petit matériel',prix:1.99,stock:200},
-  {id:'ART032',nom:'Perforatrice 2 trous',ref:'PER-2T',cat:'Petit matériel',prix:8.99,stock:40},
-  {id:'ART033',nom:'Cutter A3 lame 18mm',ref:'CUT-A3',cat:'Petit matériel',prix:4.49,stock:80},
-  {id:'ART034',nom:'Ciseaux 21cm acier inox',ref:'CIS-21',cat:'Petit matériel',prix:5.99,stock:60},
-  {id:'ART035',nom:'Scotch transparent 19mm (lot 3)',ref:'SCO-TRA19',cat:'Petit matériel',prix:3.49,stock:150},
-  {id:'ART036',nom:'Colle en bâton 21g',ref:'COL-BAT21',cat:'Petit matériel',prix:1.29,stock:200},
-  {id:'ART037',nom:'Trombone acier (boîte 100)',ref:'TRO-ACB100',cat:'Petit matériel',prix:1.49,stock:180},
-  {id:'ART038',nom:'Punaises acier (boîte 100)',ref:'PUN-ACB100',cat:'Petit matériel',prix:1.99,stock:120},
-  {id:'ART039',nom:'Règle 30cm plastique',ref:'REG-30P',cat:'Petit matériel',prix:0.99,stock:200},
+  {id:'ART023',nom:'Chemise cartonnee A4 bleu',ref:'CHE-A4-BL',cat:'Classement',prix:0.79,stock:300},
+  {id:'ART024',nom:'Pochette plastique perforee (100)',ref:'POC-PER100',cat:'Classement',prix:4.99,stock:80},
+  {id:'ART025',nom:'Boite archive carton',ref:'BOI-ARC',cat:'Classement',prix:2.29,stock:150},
+  {id:'ART026',nom:'Etiquettes adhesives blanches A4 (25f)',ref:'ETI-A4-25',cat:'Classement',prix:6.99,stock:60},
+  {id:'ART030',nom:'Agrafeuse 26/6 bureau',ref:'AGR-26-6',cat:'Petit materiel',prix:7.99,stock:50},
+  {id:'ART031',nom:'Agrafes 26/6 (boite 1000)',ref:'AGR-BTE1K',cat:'Petit materiel',prix:1.99,stock:200},
+  {id:'ART032',nom:'Perforatrice 2 trous',ref:'PER-2T',cat:'Petit materiel',prix:8.99,stock:40},
+  {id:'ART033',nom:'Cutter A3 lame 18mm',ref:'CUT-A3',cat:'Petit materiel',prix:4.49,stock:80},
+  {id:'ART034',nom:'Ciseaux 21cm acier inox',ref:'CIS-21',cat:'Petit materiel',prix:5.99,stock:60},
+  {id:'ART035',nom:'Scotch transparent 19mm (lot 3)',ref:'SCO-TRA19',cat:'Petit materiel',prix:3.49,stock:150},
+  {id:'ART036',nom:'Colle en baton 21g',ref:'COL-BAT21',cat:'Petit materiel',prix:1.29,stock:200},
+  {id:'ART037',nom:'Trombone acier (boite 100)',ref:'TRO-ACB100',cat:'Petit materiel',prix:1.49,stock:180},
+  {id:'ART038',nom:'Punaises acier (boite 100)',ref:'PUN-ACB100',cat:'Petit materiel',prix:1.99,stock:120},
+  {id:'ART039',nom:'Regle 30cm plastique',ref:'REG-30P',cat:'Petit materiel',prix:0.99,stock:200},
   {id:'ART040',nom:'Cartouche HP 302 noire',ref:'HP302-NO',cat:'Consommables',prix:14.99,stock:30},
   {id:'ART041',nom:'Cartouche HP 302 couleurs',ref:'HP302-COL',cat:'Consommables',prix:16.99,stock:25},
   {id:'ART042',nom:'Toner Brother TN-2420',ref:'TN2420',cat:'Consommables',prix:29.99,stock:20},
@@ -1430,84 +1475,81 @@ const ARTICLES_WMS=[
   {id:'ART045',nom:'Piles AAA (pack 4)',ref:'PIL-AAA4',cat:'Consommables',prix:3.49,stock:80},
 ];
 
-function renderArticlesWMS(list=ARTICLES_WMS){
+window.renderArticlesWMS = function(list){
+  list = list || ARTICLES_WMS;
   const c=document.getElementById('articlesWMSContainer'); if(!c)return;
   const cats=[...new Set(list.map(a=>a.cat))].sort();
   c.innerHTML=cats.map(cat=>{
     const arts=list.filter(a=>a.cat===cat);
-    return `<div style="margin-bottom:2rem;">
-      <div style="font-size:1rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem;">
-        📁 ${cat} <span style="font-size:.75rem;color:var(--dim);font-weight:400;">(${arts.length})</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;">
-        ${arts.map(a=>{
-          const n=a.nom.replace(/'/g,"\'"),r=a.ref.replace(/'/g,"\'");
-          return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1rem;display:flex;flex-direction:column;gap:.5rem;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-              <div>
-                <div style="font-size:.9rem;font-weight:600;color:#fff;">${a.nom}</div>
-                <div style="font-family:monospace;font-size:.72rem;color:var(--accent2);">${a.ref}</div>
-                <div style="font-size:.72rem;color:var(--green);margin-top:.2rem;">Stock : ${a.stock} · ${a.prix.toFixed(2)} €</div>
-              </div>
-              <span style="font-size:.65rem;text-transform:uppercase;padding:.2rem .5rem;border-radius:4px;background:rgba(99,179,237,.15);color:#63b3ed;">${a.cat}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:1rem;margin-top:.4rem;">
-              <div id="qr-wms-${a.id}" style="flex-shrink:0;"></div>
-              <div style="flex:1;overflow:hidden;"><svg id="bc-wms-${a.id}" style="max-width:100%;height:50px;"></svg></div>
-            </div>
-            <div style="display:flex;gap:.5rem;margin-top:.4rem;">
-              <button onclick="openZoomModalWMS('${a.id}','${n}','${r}')"
-                style="flex:1;padding:.4rem;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:#fff;cursor:pointer;font-size:.75rem;font-weight:600;">🔍 Agrandir</button>
-              <button onclick="printArticleWMS('${a.id}','${n}','${r}')"
-                style="flex:1;padding:.4rem;border:none;border-radius:6px;background:var(--accent);color:#000;cursor:pointer;font-size:.75rem;font-weight:600;">🖨️ Imprimer</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+    return '<div style="margin-bottom:2rem;">'
+      +'<div style="font-size:1rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem;">📁 '+cat+' <span style="font-size:.75rem;color:var(--dim);font-weight:400;">('+arts.length+')</span></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;">'
+      +arts.map(function(a){
+        var n=a.nom.replace(/'/g,"\'"), r=a.ref.replace(/'/g,"\'");
+        return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1rem;display:flex;flex-direction:column;gap:.5rem;">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+          +'<div><div style="font-size:.9rem;font-weight:600;color:#fff;">'+a.nom+'</div>'
+          +'<div style="font-family:monospace;font-size:.72rem;color:var(--accent2);">'+a.ref+'</div>'
+          +'<div style="font-size:.72rem;color:var(--green);margin-top:.2rem;">Stock : '+a.stock+' · '+a.prix.toFixed(2)+' €</div></div>'
+          +'<span style="font-size:.65rem;text-transform:uppercase;padding:.2rem .5rem;border-radius:4px;background:rgba(99,179,237,.15);color:#63b3ed;">'+a.cat+'</span></div>'
+          +'<div style="display:flex;align-items:center;gap:1rem;margin-top:.4rem;">'
+          +'<div id="qr-wms-'+a.id+'" style="flex-shrink:0;"></div>'
+          +'<div style="flex:1;overflow:hidden;"><svg id="bc-wms-'+a.id+'" style="max-width:100%;height:50px;"></svg></div></div>'
+          +'<div style="display:flex;gap:.5rem;margin-top:.4rem;">'
+          +'<button onclick="window.openZoomModalWMS(''+a.id+'',''+n+'',''+r+'')" style="flex:1;padding:.4rem;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:#fff;cursor:pointer;font-size:.75rem;font-weight:600;">🔍 Agrandir</button>'
+          +'<button onclick="window.printArticleWMS(''+a.id+'',''+n+'',''+r+'')" style="flex:1;padding:.4rem;border:none;border-radius:6px;background:var(--accent);color:#000;cursor:pointer;font-size:.75rem;font-weight:600;">🖨️ Imprimer</button>'
+          +'</div></div>';
+      }).join('')
+      +'</div></div>';
   }).join('');
-  list.forEach(a=>{
-    const qrEl=document.getElementById('qr-wms-'+a.id);
-    if(qrEl&&!qrEl.hasChildNodes()){
-      try{new QRCode(qrEl,{text:a.ref,width:60,height:60,colorDark:'#ffffff',colorLight:'#1a1d2e'});}catch(e){}
+  list.forEach(function(a){
+    var qrEl=document.getElementById('qr-wms-'+a.id);
+    if(qrEl && !qrEl.hasChildNodes()){
+      try{ new QRCode(qrEl,{text:a.ref,width:60,height:60,colorDark:'#ffffff',colorLight:'#1a1d2e'}); }catch(e){}
     }
-    try{JsBarcode('#bc-wms-'+a.id,a.ref,{format:'CODE128',width:1.4,height:40,displayValue:false,background:'transparent',lineColor:'#ffffff'});}catch(e){}
+    try{ JsBarcode('#bc-wms-'+a.id,a.ref,{format:'CODE128',width:1.4,height:40,displayValue:false,background:'transparent',lineColor:'#ffffff'}); }catch(e){}
   });
-}
+};
 
-function filterArticlesWMS(q){
-  const l=q.toLowerCase();
-  renderArticlesWMS(ARTICLES_WMS.filter(a=>a.nom.toLowerCase().includes(l)||a.ref.toLowerCase().includes(l)||a.cat.toLowerCase().includes(l)));
-}
+window.filterArticlesWMS = function(q){
+  var l=q.toLowerCase();
+  window.renderArticlesWMS(ARTICLES_WMS.filter(function(a){
+    return a.nom.toLowerCase().includes(l)||a.ref.toLowerCase().includes(l)||a.cat.toLowerCase().includes(l);
+  }));
+};
 
-function openZoomModalWMS(id,nom,ref){
+window.openZoomModalWMS = function(id,nom,ref){
   document.getElementById('modalZoomTitle').textContent=nom+' · '+ref;
-  const qb=document.getElementById('modalQR'); qb.innerHTML='';
-  try{new QRCode(qb,{text:ref,width:180,height:180,colorDark:'#ffffff',colorLight:'#1a1d2e'});}catch(e){}
-  try{JsBarcode('#modalBarcode',ref,{format:'CODE128',width:2.5,height:80,displayValue:true,background:'transparent',lineColor:'#ffffff',fontSize:14});}catch(e){}
-  const m=document.getElementById('modalZoom'); m.style.display='flex';
-  m.onclick=e=>{if(e.target===m)closeZoomModal();};
-}
-function closeZoomModal(){document.getElementById('modalZoom').style.display='none';}
+  var qb=document.getElementById('modalQR'); qb.innerHTML='';
+  try{ new QRCode(qb,{text:ref,width:180,height:180,colorDark:'#ffffff',colorLight:'#1a1d2e'}); }catch(e){}
+  try{ JsBarcode('#modalBarcode',ref,{format:'CODE128',width:2.5,height:80,displayValue:true,background:'transparent',lineColor:'#ffffff',fontSize:14}); }catch(e){}
+  var m=document.getElementById('modalZoom'); m.style.display='flex';
+  m.onclick=function(e){ if(e.target===m) window.closeZoomModal(); };
+};
 
-function printArticleWMS(id,nom,ref){
-  const qrCanvas=document.querySelector('#qr-wms-'+id+' canvas');
-  const qrImg=qrCanvas?qrCanvas.toDataURL():'';
-  const bcSvg=document.getElementById('bc-wms-'+id)?.outerHTML||'';
-  const win=window.open('','_blank','width=420,height=360');
-  win.document.write(`<!DOCTYPE html><html><head><title>Etiquette ${ref}</title>
-  <style>body{margin:0;padding:24px;font-family:Arial,sans-serif;background:#fff;color:#000;text-align:center;}
-  .box{border:2px solid #000;border-radius:8px;padding:16px;display:inline-block;min-width:280px;}
-  .nom{font-size:15px;font-weight:bold;margin-bottom:4px;}.ref{font-family:monospace;font-size:12px;color:#555;margin-bottom:12px;}
-  .codes{display:flex;align-items:center;justify-content:center;gap:14px;}img{width:80px;height:80px;}
-  @media print{button{display:none;}}</style></head><body>
-  <div class="box"><div class="nom">${nom}</div><div class="ref">${ref}</div>
-  <div class="codes">${qrImg?`<img src="${qrImg}" alt="QR">`:''}${bcSvg}</div></div>
-  <br><br><button onclick="window.print()" style="padding:.5rem 1.5rem;font-size:14px;cursor:pointer;">Imprimer</button>
-  </body></html>`);
+window.closeZoomModal = function(){
+  document.getElementById('modalZoom').style.display='none';
+};
+
+window.printArticleWMS = function(id,nom,ref){
+  var qrCanvas=document.querySelector('#qr-wms-'+id+' canvas');
+  var qrImg=qrCanvas?qrCanvas.toDataURL():'';
+  var bcSvg=document.getElementById('bc-wms-'+id)?document.getElementById('bc-wms-'+id).outerHTML:'';
+  var win=window.open('','_blank','width=420,height=360');
+  win.document.write('<!DOCTYPE html><html><head><title>Etiquette '+ref+'</title>'
+    +'<style>body{margin:0;padding:24px;font-family:Arial,sans-serif;background:#fff;color:#000;text-align:center;}'
+    +'.box{border:2px solid #000;border-radius:8px;padding:16px;display:inline-block;min-width:280px;}'
+    +'.nom{font-size:15px;font-weight:bold;margin-bottom:4px;}.ref{font-family:monospace;font-size:12px;color:#555;margin-bottom:12px;}'
+    +'.codes{display:flex;align-items:center;justify-content:center;gap:14px;}img{width:80px;height:80px;}'
+    +'@media print{button{display:none;}}</style></head><body>'
+    +'<div class="box"><div class="nom">'+nom+'</div><div class="ref">'+ref+'</div>'
+    +'<div class="codes">'+(qrImg?'<img src="'+qrImg+'" alt="QR">':'')+bcSvg+'</div></div>'
+    +'<br><br><button onclick="window.print()" style="padding:.5rem 1.5rem;font-size:14px;cursor:pointer;">Imprimer</button>'
+    +'</body></html>');
   win.document.close();
-}
+};
 
+})();
 </script>
 
 <style>
@@ -1517,31 +1559,5 @@ function printArticleWMS(id,nom,ref){
   #print-content div{border-radius:0;}
 }
 </style>
-
-<!-- ══ SECTION ARTICLES ══ -->
-<div class="section" id="section-articles">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.5rem;">
-    <h2 style="margin:0;">📋 Catalogue Articles</h2>
-    <input type="text" placeholder="🔍 Rechercher un article..."
-      oninput="filterArticlesWMS(this.value)"
-      style="padding:.5rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#fff;width:260px;">
-  </div>
-  <div id="articlesWMSContainer"></div>
-</div>
-
-<!-- Modale zoom QR/Barcode -->
-<div id="modalZoom" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
-  <div style="background:var(--panel);border:1px solid var(--border2,#333);border-radius:14px;padding:2rem;max-width:480px;width:90%;text-align:center;">
-    <div id="modalZoomTitle" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem;color:#fff;"></div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;">
-      <div id="modalQR"></div>
-      <svg id="modalBarcode" style="max-width:100%;"></svg>
-    </div>
-    <button onclick="closeZoomModal()"
-      style="margin-top:1.5rem;padding:.6rem 1.5rem;background:var(--accent,#7c3aed);border:none;border-radius:8px;cursor:pointer;font-weight:700;color:#fff;">
-      ✕ Fermer
-    </button>
-  </div>
-</div>
 </body>
 </html>
