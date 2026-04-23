@@ -1426,6 +1426,9 @@ async function loadData(){
       checkUrgentNotif();
     }
   } else {
+    DATA.commandes = JSON.parse(localStorage.getItem('wms_commandes')||'[]');
+    DATA.retours = JSON.parse(localStorage.getItem('wms_retours')||'[]');
+    DATA.receptions = JSON.parse(localStorage.getItem('wms_receptions')||'[]');
     allCommandes = DATA.commandes;
     allRetours = DATA.retours;
     allReceptions = DATA.receptions;
@@ -1478,6 +1481,8 @@ function restoreScenarioState(){
   setInterval(()=>{
     const m=localStorage.getItem('wms_urgent_ping');
     if(m){ localStorage.removeItem('wms_urgent_ping'); playUrgent(); showToast('🚨 Nouvelle commande urgente reçue !','error',6000); loadData(); }
+    const n=localStorage.getItem('wms_new_order_ping');
+    if(n){ localStorage.removeItem('wms_new_order_ping'); loadData(); }
   },2000);
 })();
 
