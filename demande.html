@@ -170,7 +170,6 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   .header{padding:.6rem 1rem;}
 }
 </style>
-<script src="articles.js"></script>
 </head>
 <body>
 
@@ -400,7 +399,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <!-- ══ FIREBASE + LOGIC ═══════════════════════════ -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ══ Firebase config ══ (même config que wms.html)
 const firebaseConfig = {
@@ -420,7 +419,27 @@ try {
 } catch(e) { console.warn('Firebase indispo, mode localStorage'); }
 
 // ══ Catalogue articles ══
-const ARTICLES = (typeof ARTICLES_CATALOGUE !== "undefined") ? ARTICLES_CATALOGUE : []; // Source: articles.js
+
+// ══ ARTICLES depuis Firebase ══
+let ARTICLES = [];
+if (useFirebase) {
+  onSnapshot(query(collection(db, 'articles'), orderBy('cat'), orderBy('nom')), function(snap) {
+    // 1. On récupère les articles depuis Firebase
+    ARTICLES = snap.docs.map(function(d) {
+      return Object.assign({id: d.id}, d.data());
+    });
+    
+    // 2. On met à jour la liste utilisée pour l'affichage
+    filteredArticles = [...ARTICLES];
+    
+    // 3. On met à jour les boutons de catégories en haut
+    if(typeof initCats === 'function') initCats();
+    
+    // 4. On affiche enfin les articles !
+    if(typeof renderArticles === 'function') renderArticles();
+  });
+}
+
 
 // ══ State ══
 let cart = {}; // {id: qty}
