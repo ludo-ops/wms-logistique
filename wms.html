@@ -1326,7 +1326,7 @@ window.validateScanOrder=async function(){
 
 // ══ Données ══
 async let _snapshotListening=false;
-function loadData(){
+async function loadData(){
   if(useFirebase){
     if(_snapshotListening) return;
     _snapshotListening=true;
