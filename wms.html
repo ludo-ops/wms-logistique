@@ -1472,13 +1472,14 @@ window.closeAddArticleForm = function() {
   });
 };
 
-window.saveNewArticle = async function() {
+window.saveNewArticle = async function(){
   const nom = document.getElementById('add-nom').value.trim();
   const ref = document.getElementById('add-ref').value.trim().toUpperCase();
-  const prix = parseFloat(document.getElementById('add-prix').value) || 0;
   const cat = document.getElementById('add-cat').value.trim();
-  const stock = parseInt(document.getElementById('add-stock').value) || 0;
-
+  const prix = parseFloat(document.getElementById('add-prix').value || '0');
+  const stock = parseInt(document.getElementById('add-stock').value || '0', 10);
+  
+  // ... garde le reste de ta fonction (le if(!nom...), le await addDoc..., etc.)
   if (!nom || !ref || prix <= 0 || !cat) {
     showToast('Remplis tous les champs correctement', 'error');
     return;
