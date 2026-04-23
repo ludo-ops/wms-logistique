@@ -249,22 +249,28 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <!-- ══ NAV TABS ══════════════════════════════════════ -->
 <div class="nav">
   <div class="nav-tab active" onclick="switchTab('commandes')" id="tab-commandes">
-    📦 Commandes <span id="cnt-commandes" class="badge-count">0</span>
+    📦 Commandes
+    <span id="cnt-commandes" class="badge-count">0</span>
   </div>
   <div class="nav-tab" onclick="switchTab('retours')" id="tab-retours">
-    ↩️ Retours <span id="cnt-retours" class="badge-count">0</span>
+    ↩️ Retours
+    <span id="cnt-retours" class="badge-count">0</span>
   </div>
   <div class="nav-tab" onclick="switchTab('reception')" id="tab-reception">
-    🚚 Réception <span id="cnt-reception" class="badge-count">0</span>
+    🚚 Réception
+    <span id="cnt-reception" class="badge-count">0</span>
   </div>
   <div class="nav-tab" onclick="switchTab('scan')" id="tab-scan">
-    📷 Scan / Prép.
+    📷 Scan Prép.
   </div>
   <div class="nav-tab" onclick="switchTab('historique')" id="tab-historique">
-    📋 Historique
+    🕘 Historique
   </div>
   <div class="nav-tab" onclick="switchTab('scenarios')" id="tab-scenarios">
     🎮 Scénarios
+  </div>
+  <div class="nav-tab" onclick="switchTab('articles')" id="tab-articles">
+    📋 Articles
   </div>
 </div>
 
@@ -712,6 +718,7 @@ window.switchTab = function(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   if(tab==='scan') populateScanSelect();
   if(tab==='historique') loadHistorique();
+  if(tab==='articles') renderArticlesWMS();
 };
 
 window.openAddArticleForm = function(){
