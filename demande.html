@@ -423,26 +423,28 @@ try {
 // ══ ARTICLES depuis Firebase ══
 let ARTICLES = [];
 if (useFirebase) {
-  // Note : Si rien ne s'affiche, regarde la console (F12) pour cliquer sur le lien d'index Firebase
+  // J'ai enlevé le "orderBy" pour être certain que Firebase ne bloque pas l'affichage
   onSnapshot(collection(db, 'articles'), function(snap) {
-    // 1. On récupère les données
+    
+    // 1. On récupère les articles depuis Firebase
     ARTICLES = snap.docs.map(function(d) {
       return Object.assign({id: d.id}, d.data());
     });
     
-    // 2. IMPORTANT : On met à jour la liste filtrée
+    // 2. TRÈS IMPORTANT : On remplit la liste qui gère l'affichage à l'écran
     filteredArticles = [...ARTICLES];
     
-    // 3. On met à jour les boutons de catégories
+    // 3. On crée les boutons de catégories (Papier, Écriture, etc.)
     if (typeof initCats === 'function') initCats();
     
     // 4. On lance la BONNE fonction d'affichage
     if (typeof renderArticles === 'function') renderArticles();
     
-    console.log("Articles synchronisés :", ARTICLES.length);
-  }, (error) => {
-    console.error("Erreur Firebase (Index ?) :", error);
+  }, function(error) {
+    console.error("Erreur avec Firebase :", error);
   });
+} else {
+  ARTICLES = [];
 }
 
 // ══ State ══
