@@ -229,8 +229,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
 
@@ -347,7 +345,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <h3>📷 Scanner d'articles</h3>
         <label class="form-group">
           <span style="font-size:.75rem;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:.3rem;">Sélectionner commande</span>
-<div id="scan-preparateur-banner" style="display:none;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:8px;padding:.5rem 1rem;margin-bottom:.75rem;font-size:.85rem;color:var(--accent);font-weight:600;"></div>
           <select class="select-order" id="scan-order-select" onchange="loadScanOrder()">
             <option value="">— Choisir une commande —</option>
           </select>
@@ -363,11 +360,10 @@ tr:hover td{background:rgba(255,255,255,.02);}
         </div>
         <div class="scan-msg" id="scan-msg"></div>
         <div class="cam-controls">
-  <button class="btn btn-primary btn-sm" onclick="startCamera()">Démarrer</button>
-  <button class="btn btn-ghost btn-sm" onclick="stopCamera()">Arrêter</button>
-  <button class="btn btn-ghost btn-sm" onclick="simulateScan()">Simuler scan</button>
-  <button class="btn btn-ghost btn-sm" onclick="window.scanPreparateur=null;document.getElementById('scan-preparateur-banner').style.display='none';showToast('Préparateur réinitialisé','info')">Changer préparateur</button>
-</div>
+          <button class="btn btn-primary btn-sm" onclick="startCamera()">📷 Démarrer</button>
+          <button class="btn btn-ghost btn-sm" onclick="stopCamera()">⏹ Arrêter</button>
+          <button class="btn btn-ghost btn-sm" onclick="simulateScan()">🎯 Simuler scan</button>
+        </div>
       </div>
       <div class="scan-panel">
         <h3>📋 Progression commande</h3>
@@ -771,7 +767,7 @@ function renderCommandes(){
     tbody.innerHTML+=`<tr>
       <td><span class="cmd-ref">${cmd.ref}</span></td>
       <td>${cmd.client}</td>
-      <td style="color:var(--dim)">—</td>
+      <td>${cmd.responsable||'—'}</td>
       <td>${modeTag}</td>
       <td>${statusTag}</td>
       <td>${progBar}</td>
@@ -1130,31 +1126,22 @@ window.loadArticlesWMS = function(){
       <div style="margin-bottom:2rem;">
         <h3 style="margin:0 0 1rem;color:var(--accent);">${cat}</h3>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
-         {arts.map(a => {
-  const safeId = a.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return `
-    <div id="card-${safeId}" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1rem;">
-      <div style="font-weight:700;color:#fff;">${a.nom}</div>
-      <div style="font-family:monospace;color:var(--accent2);font-size:.8rem;">${a.ref}</div>
-      <div style="margin-top:.35rem;color:var(--dim);font-size:.8rem;">Stock: ${a.stock} • ${a.prix} €</div>
-      <div style="font-size:.7rem;color:var(--dim);">ID: ${a.id}</div>
-      <div style="margin-top:1rem;display:flex;gap:1rem;align-items:flex-start;">
-        <div style="flex:1;"><div style="font-size:.7rem;color:var(--dim);">QR</div><div id="qr-${safeId}" style="width:80px;height:80px;"></div></div>
-        <div style="flex:1;"><div style="font-size:.7rem;color:var(--dim);">Barcode</div><canvas id="bc-${safeId}"></canvas></div>
+          ${arts.map(a => `
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1rem;">
+              <div style="font-weight:700;color:#fff;">${a.nom}</div>
+              <div style="font-family:monospace;color:var(--accent2);font-size:.8rem;">${a.ref}</div>
+              <div style="margin-top:.35rem;color:var(--dim);font-size:.8rem;">Stock: ${a.stock} • ${a.prix} €</div>
+              <div style="font-size:.7rem;color:var(--dim);">ID: ${a.id}</div>
+              <div style="margin-top:.75rem;">
+                <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}', event)">🗑 Supprimer</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
-      <div style="margin-top:.75rem;">
-        <button class="btn btn-ghost btn-sm" onclick="printArticleLabel('${safeId}','${a.ref}','${a.nom}')">🖨️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}', event)">🗑</button>
-      </div>
-    </div>`;
-}).join('')}
-setTimeout(() => {
-  arts.forEach(a => {
-    const safeId = a.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    new QRCode(document.getElementById('qr-'+safeId), {text:a.ref,width:80,height:80});
-    JsBarcode(document.getElementById('bc-'+safeId), a.ref, {width:1.5,height:50});
-  });
-}, 200);
+    `;
+  }).join('');
+}
 
 function renderReceptions(){
   const tbody=document.getElementById('tbody-receptions');
@@ -1463,7 +1450,7 @@ window.loadScenario = async function (level) {
 };
 
 // ══ SCAN / Camera ══
-let cameraStream=null, scanOrderData=null, scanSimInterval=null, scanPreparateur=null;
+let cameraStream=null, scanOrderData=null, scanSimInterval=null;
 
 window.startCamera=async function(){
   try{
@@ -1524,18 +1511,6 @@ function populateScanSelect(){
 }
 
 window.loadScanOrder=function(){
-  if(!window.scanPreparateur){
-    const saisie=prompt("👤 Entrez votre Nom et Prénom avant de commencer :");
-    if(!saisie||!saisie.trim()){
-      document.getElementById('scan-order-select').value='';
-      showToast('Veuillez entrer votre nom pour continuer','warn');
-      return;
-    }
-    window.scanPreparateur=saisie.trim();
-    const banner=document.getElementById('scan-preparateur-banner');
-    if(banner){ banner.textContent='👤 Préparateur : '+window.scanPreparateur; banner.style.display='block'; }
-    showToast('Préparateur : '+window.scanPreparateur,'success');
-  }
   const id=document.getElementById('scan-order-select').value;
   if(!id){ scanOrderData=null; document.getElementById('scan-order-info').innerHTML='<div class="empty-state"><div class="es-icon">📦</div><p>Sélectionnez une commande</p></div>'; document.getElementById('scan-progress-wrap').style.display='none'; document.getElementById('scan-items-list').innerHTML=''; return; }
 const cmd=allCommandes.find(c=>c.id===id);
@@ -1779,41 +1754,6 @@ window.saveNewArticle = async function(){
   body{background:#fff;color:#000;}
   #print-content div{border-radius:0;}
 }
-
-// Fonction impression étiquettes articles
-window.printArticleLabel = function(safeId, ref, nom) {
-  const qrEl = document.getElementById('qr-'+safeId);
-  const bcEl = document.getElementById('bc-'+safeId);
-  const qrImg = qrEl ? qrEl.querySelector('img')?.src || '' : '';
-  const bcImg = bcEl ? bcEl.toDataURL() : '';
-  
-  const printWin = window.open('', '_blank', 'width=420,height=550');
-  printWin.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>Étiquette ${ref}</title>
-    <style>
-      body { font-family: monospace; text-align: center; padding: 2rem; background: white; color: black; font-size: 16px; margin: 0; }
-      h2 { border-bottom: 2px solid black; padding-bottom: 8px; margin: 0 0 1rem 0; }
-      p { font-size: 20px; margin: 10px 0; font-weight: bold; }
-      .codes { display: flex; gap: 1rem; justify-content: center; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
-      img { max-width: 140px; max-height: 140px; image-rendering: crisp-edges; }
-      button { padding: 12px 24px; background: black; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 1rem; }
-      @media print { button { display: none; } body { padding: 1rem; } }
-    </style>
-    </head>
-    <body>
-      <h2>${nom}</h2>
-      <p>${ref}</p>
-      <div class="codes">
-        <div><small>QR Code</small><br><img src="${qrImg}"></div>
-        <div><small>Code-barres</small><br><img src="${bcImg}"></div>
-      </div>
-      <button onclick="window.print();">🖨️ IMPRIMER</button>
-    </body></html>
-  `);
-  printWin.document.close();
-};
 </style>
 
 <!-- Modale ajout article -->
