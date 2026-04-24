@@ -980,9 +980,21 @@ function updateStats(){
     <div class="stat-card c-red"><div class="stat-val">${urg}</div><div class="stat-label">Urgentes</div></div>`;
 }
 
-async function updateCommande(id,data){
-  if(useFirebase){ await updateDoc(doc(db,'commandes',id),data); }
-  else { const c=DATA.commandes.find(c=>c.id===id); if(c){ Object.assign(c,data); saveLocal('commandes'); } }
+async function updateCommande(id, data){
+  const safeData = {
+    ...data,
+    responsable: data.responsable ?? ''
+  };
+
+  if (useFirebase) {
+    await updateDoc(doc(db, 'commandes', id), safeData);
+  } else {
+    const c = DATA.commandes.find(c => c.id === id);
+    if (c) {
+      Object.assign(c, safeData);
+      saveLocal('commandes');
+    }
+  }
 }
 
 window.deleteCommande = async function(id){
