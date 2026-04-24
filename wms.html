@@ -816,7 +816,7 @@ window.generateDemoCommandes = async function(){
     const cmd={
       ref:'CMD-'+uid(),
       client:randomEl(CLIENTS),
-      responsable:randomEl(RESPONSABLES),
+      responsable:'',
       mode,
       status:'en-attente',
       progress:0,
@@ -842,7 +842,15 @@ window.generateDemoCommandes = async function(){
 async function saveCommandes(list){
   if(useFirebase){
     const b=writeBatch(db);
-    list.forEach(cmd=>{ const ref=doc(collection(db,'commandes')); cmd.id=ref.id; b.set(ref,cmd); });
+    list.forEach(cmd => {
+      const ref = doc(collection(db,'commandes'));
+      cmd.id = ref.id;
+      const safeCmd = {
+        ...cmd,
+        responsable: cmd.responsable ?? ''
+      };
+      b.set(ref, safeCmd);
+    });
     await b.commit();
   } else {
     list.forEach(cmd=>{ if(!cmd.id)cmd.id=uid(); DATA.commandes.push(cmd); });
