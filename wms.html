@@ -735,10 +735,7 @@ window.deleteArticle = async function(id, e){
 
   try{
     await deleteDoc(doc(db,'articles',id));
-
-    if(typeof loadData === 'function'){
-      await loadData();
-    }
+    if(typeof loadData === 'function') await loadData();
 
     setTimeout(() => {
       if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
