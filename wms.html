@@ -1229,135 +1229,217 @@ window.clearHistorique=async function(){
 };
 
 // ══ SCENARIOS ══
-window.loadScenario = async function(level){
-  if(!ARTICLES || ARTICLES.length < 3){
+const SCENARIO_CONFIGS = {
+  easy: { cmds: 10, receps: 3, rets: 3, ncRatio: 0 },
+  medium: { cmds: 20, receps: 5, rets: 5, ncRatio: 0.2 },
+  advanced: { cmds: 28, receps: 8, rets: 8, ncRatio: 0.5 },
+  expert: { cmds: 35, receps: 10, rets: 10, ncRatio: 0.7 },
+};
+
+window.resetScenarios = async function () {
+  if (!confirm('Réinitialiser tous les scénarios et données démo ?')) return;
+
+  try {
+    localStorage.removeItem('wms_active_scenario');
+    document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('loaded'));
+
+    if (useFirebase) {
+      const purge = async (colName) => {
+        const snap = await getDocs(collection(db, colName));
+        const b = writeBatch(db);
+        snap.forEach(d => {
+          if (d.data().isDemo) b.delete(d.ref);
+        });
+        await b.commit();
+      };
+      await purge('commandes');
+      await purge('retours');
+      await purge('receptions');
+    } else {
+      DATA.commandes = DATA.commandes.filter(c => !c.isDemo);
+      DATA.retours = DATA.retours.filter(c => !c.isDemo);
+      DATA.receptions = DATA.receptions.filter(c => !c.isDemo);
+      saveLocal('commandes');
+      saveLocal('retours');
+      saveLocal('receptions');
+    }
+
+    await loadData();
+    if (typeof loadCommandes === 'function') loadCommandes();
+    if (typeof loadRetours === 'function') loadRetours();
+    if (typeof loadReceptions === 'function') loadReceptions();
+    showToast('Scénarios réinitialisés', 'warn');
+  } catch (e) {
+    console.error('resetScenarios error', e);
+    showToast('Erreur lors de la réinitialisation', 'error');
+  }
+};
+
+window.loadScenario = async function (level) {
+  const cfg = SCENARIO_CONFIGS[level];
+  if (!cfg) {
+    showToast('Scénario invalide', 'error');
+    return;
+  }
+
+  if (!ARTICLES || ARTICLES.length < 3) {
     showToast('Articles Firebase pas encore chargés', 'error');
     return;
   }
 
-  if(!confirm(`Charger le scénario "${level}" ? Les données de démo existantes seront remplacées.`)) return;
-  showToast('Chargement du scénario…','info');
-  document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('loaded'));
-  document.getElementById('card-'+level).classList.add('loaded');
-  localStorage.setItem('wms_active_scenario',level);
+  if (!confirm(`Charger le scénario "${level}" ? Les données de démo existantes seront remplacées.`)) return;
 
-  const configs={
-    easy:{cmds:10,receps:3,rets:3,ncRatio:0},
-    medium:{cmds:20,receps:5,rets:5,ncRatio:.2},
-    advanced:{cmds:28,receps:8,rets:8,ncRatio:.5},
-    expert:{cmds:35,receps:10,rets:10,ncRatio:.7},
-  };
-  const cfg=configs[level];
+  try {
+    showToast('Chargement du scénario…', 'info');
 
-  if(useFirebase){
-    const purge = async(colName) => {
-      const snap = await getDocs(collection(db,colName));
-      const b = writeBatch(db);
-      snap.forEach(d => { if(d.data().isDemo) b.delete(d.ref); });
-      await b.commit();
-    };
-    await purge('commandes');
-    await purge('retours');
-    await purge('receptions');
-  } else {
-    DATA.commandes = DATA.commandes.filter(c => !c.isDemo);
-    DATA.retours = DATA.retours.filter(c => !c.isDemo);
-    DATA.receptions = DATA.receptions.filter(c => !c.isDemo);
-  }
+    document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('loaded'));
+    const card = document.getElementById('card-' + level);
+    if (card) card.classList.add('loaded');
 
-  const cmdList = [], retList = [], recList = [];
+    localStorage.setItem('wms_active_scenario', level);
 
-  for(let i=0;i<cfg.cmds;i++){
-    const arts = [randomEl(ARTICLES), randomEl(ARTICLES), randomEl(ARTICLES)];
-    const mode = level==='expert' && i<5 ? 'Urgent' : level==='advanced' && i<3 ? 'Urgent' : randomEl(MODES);
-    cmdList.push({
-      ref:'CMD-'+uid(),
-      client:randomEl(CLIENTS),
-      responsable:'',
-      mode,
-      status:'en-attente',
-      progress:0,
-      createdAt:Date.now()-randomInt(0,86400000*2),
-      dateStr:new Date(Date.now()-randomInt(0,3600000*8)).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
-      tracking:genTracking(),
-      articles:arts.map(a=>({id:a.id, nom:a.nom, ref:a.ref, qte:randomInt(1,5), scanned:0})),
-      adresse:randomEl(CLIENTS)+', France',
-      commentaire:level==='advanced' && Math.random()>.6 ? '⚠️ Adresse à vérifier' : '',
-      isDemo:true,
+    if (useFirebase) {
+      const purge = async (colName) => {
+        const snap = await getDocs(collection(db, colName));
+        const b = writeBatch(db);
+        snap.forEach(d => {
+          if (d.data().isDemo) b.delete(d.ref);
+        });
+        await b.commit();
+      };
+      await purge('commandes');
+      await purge('retours');
+      await purge('receptions');
+    } else {
+      DATA.commandes = DATA.commandes.filter(c => !c.isDemo);
+      DATA.retours = DATA.retours.filter(c => !c.isDemo);
+      DATA.receptions = DATA.receptions.filter(c => !c.isDemo);
+      saveLocal('commandes');
+      saveLocal('retours');
+      saveLocal('receptions');
+    }
+
+    const now = Date.now();
+    const cmdList = [];
+    const retList = [];
+    const recList = [];
+
+    const pickArticle = () => randomEl(ARTICLES);
+
+    for (let i = 0; i < cfg.cmds; i++) {
+      const arts = [pickArticle(), pickArticle(), pickArticle()];
+      const mode = level === 'expert' && i < 5 ? 'Urgent' : level === 'advanced' && i < 3 ? 'Urgent' : randomEl(MODES);
+
+      cmdList.push({
+        id: uid(),
+        ref: 'CMD-' + uid(),
+        client: randomEl(CLIENTS),
+        responsable: '',
+        mode,
+        status: 'en-attente',
+        progress: 0,
+        createdAt: now - randomInt(0, 86400000 * 2),
+        dateStr: new Date(now - randomInt(0, 3600000 * 8)).toLocaleString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        tracking: genTracking(),
+        articles: arts.map(a => ({
+          id: a.id,
+          nom: a.nom,
+          ref: a.ref,
+          qte: randomInt(1, 5),
+          scanned: 0
+        })),
+        adresse: randomEl(CLIENTS) + ', France',
+        commentaire: level === 'advanced' && Math.random() > 0.6 ? '⚠️ Adresse à vérifier' : '',
+        isDemo: true,
+      });
+    }
+
+    for (let i = 0; i < cfg.rets; i++) {
+      const art = pickArticle();
+      retList.push({
+        id: uid(),
+        ref: 'RET-' + uid(),
+        article: art.nom,
+        refArt: art.ref,
+        qte: randomInt(1, 5),
+        motif: randomEl(MOTIFSRETOUR),
+        status: Math.random() > cfg.ncRatio ? 'conforme' : 'non-conforme',
+        createdAt: now - randomInt(0, 43200000),
+        isDemo: true,
+      });
+    }
+
+    for (let i = 0; i < cfg.receps; i++) {
+      const art = pickArticle();
+      const art2 = pickArticle();
+      recList.push({
+        id: uid(),
+        ref: 'REC-' + uid(),
+        fournisseur: randomEl(FOURNISSEURS),
+        articles: `${art.nom}, ${art2.nom}`,
+        qteAttendue: randomInt(10, 100),
+        status: Math.random() > cfg.ncRatio ? 'conforme' : 'non-conforme',
+        createdAt: now - randomInt(0, 21600000),
+        isDemo: true,
+      });
+    }
+
+    if (useFirebase) {
+      const bCmd = writeBatch(db);
+      cmdList.forEach(cmd => {
+        const ref = doc(collection(db, 'commandes'));
+        cmd.id = ref.id;
+        bCmd.set(ref, cmd);
+      });
+      await bCmd.commit();
+
+      const bRet = writeBatch(db);
+      retList.forEach(r => {
+        const ref = doc(collection(db, 'retours'));
+        r.id = ref.id;
+        bRet.set(ref, r);
+      });
+      await bRet.commit();
+
+      const bRec = writeBatch(db);
+      recList.forEach(r => {
+        const ref = doc(collection(db, 'receptions'));
+        r.id = ref.id;
+        bRec.set(ref, r);
+      });
+      await bRec.commit();
+    } else {
+      DATA.commandes.push(...cmdList);
+      DATA.retours.push(...retList);
+      DATA.receptions.push(...recList);
+      saveLocal('commandes');
+      saveLocal('retours');
+      saveLocal('receptions');
+    }
+
+    await loadData();
+    if (typeof loadCommandes === 'function') loadCommandes();
+    if (typeof loadRetours === 'function') loadRetours();
+    if (typeof loadReceptions === 'function') loadReceptions();
+
+    await addHistorique({
+      type: 'scenario',
+      icon: '🎮',
+      color: 'var(--purple)',
+      msg: `Scénario "${level}" chargé — ${cfg.cmds} cmds, ${cfg.rets} retours, ${cfg.receps} réceptions`
     });
+
+    showToast(`Scénario ${level} chargé !`, 'success');
+    switchTab('commandes');
+  } catch (e) {
+    console.error('loadScenario error', e);
+    showToast('Erreur lors du chargement du scénario', 'error');
   }
-
-  for(let i=0;i<cfg.rets;i++){
-    const art = randomEl(ARTICLES);
-    retList.push({
-      id:uid(),
-      ref:'RET-'+uid(),
-      article:art.nom,
-      refArt:art.ref,
-      qte:randomInt(1,5),
-      motif:randomEl(MOTIFSRETOUR),
-      status:Math.random()>cfg.ncRatio ? 'conforme' : 'non-conforme',
-      createdAt:Date.now()-randomInt(0,43200000),
-      isDemo:true,
-    });
-  }
-
-  for(let i=0;i<cfg.receps;i++){
-    const art = randomEl(ARTICLES), art2 = randomEl(ARTICLES);
-    recList.push({
-      id:uid(),
-      ref:'REC-'+uid(),
-      fournisseur:randomEl(FOURNISSEURS),
-      articles:`${art.nom}, ${art2.nom}`,
-      qteAttendue:randomInt(10,100),
-      status:Math.random()>cfg.ncRatio ? 'conforme' : 'non-conforme',
-      createdAt:Date.now()-randomInt(0,21600000),
-      isDemo:true,
-    });
-  }
-
-  if(useFirebase){
-    await saveCommandes(cmdList);
-
-    const bR = writeBatch(db);
-    retList.forEach(r => {
-      const ref = doc(collection(db,'retours'));
-      r.id = ref.id;
-      bR.set(ref, r);
-    });
-    await bR.commit();
-
-    const bRec = writeBatch(db);
-    recList.forEach(r => {
-      const ref = doc(collection(db,'receptions'));
-      r.id = ref.id;
-      bRec.set(ref, r);
-    });
-    await bRec.commit();
-  } else {
-    DATA.commandes.push(...cmdList);
-    DATA.retours.push(...retList);
-    DATA.receptions.push(...recList);
-    saveLocal('commandes');
-    saveLocal('retours');
-    saveLocal('receptions');
-  }
-
-  await loadData();
-
-  if(typeof loadCommandes === 'function') loadCommandes();
-  if(typeof loadRetours === 'function') loadRetours();
-  if(typeof loadReceptions === 'function') loadReceptions();
-
-  await addHistorique({
-    type:'scenario',
-    icon:'🎮',
-    color:'var(--purple)',
-    msg:`Scénario "${level}" chargé — ${cfg.cmds} cmds, ${cfg.rets} retours, ${cfg.receps} réceptions`
-  });
-
-  showToast(`Scénario ${level} chargé !`, 'success');
-  switchTab('commandes');
 };
 
 // ══ SCAN / Camera ══
