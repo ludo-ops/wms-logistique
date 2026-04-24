@@ -1276,7 +1276,7 @@ window.resetScenarios = async function () {
 };
 
 window.loadScenario = async function (level) {
-  const cfg = SCENARIO_CONFIGS[level];
+  const cfg = SCENARIO_CONFIGS?.[level];
   if (!cfg) {
     showToast('Scénario invalide', 'error');
     return;
@@ -1319,12 +1319,19 @@ window.loadScenario = async function (level) {
       saveLocal('receptions');
     }
 
+    const pickArticle = () => {
+      const a = randomEl(ARTICLES);
+      return {
+        id: a?.id || '',
+        nom: a?.nom || a?.name || 'Article sans nom',
+        ref: a?.ref || a?.reference || ''
+      };
+    };
+
     const now = Date.now();
     const cmdList = [];
     const retList = [];
     const recList = [];
-
-    const pickArticle = () => randomEl(ARTICLES);
 
     for (let i = 0; i < cfg.cmds; i++) {
       const arts = [pickArticle(), pickArticle(), pickArticle()];
