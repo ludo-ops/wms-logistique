@@ -735,12 +735,6 @@ window.deleteArticle = async function(id, e){
 
   try{
     await deleteDoc(doc(db,'articles',id));
-    if(typeof loadData === 'function') await loadData();
-
-    setTimeout(() => {
-      if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
-    }, 300);
-
     showToast('Article supprimé', 'success');
   } catch(error){
     console.error('Erreur suppression article:', error);
@@ -1235,7 +1229,12 @@ window.clearHistorique=async function(){
 };
 
 // ══ SCENARIOS ══
-window.loadScenario=async function(level){
+window.loadScenario = async function(level){
+  if(!ARTICLES || ARTICLES.length < 3){
+    showToast('Articles Firebase pas encore chargés', 'error');
+    return;
+  }
+
   if(!confirm(`Charger le scénario "${level}" ? Les données de démo existantes seront remplacées.`))return;
   showToast('Chargement du scénario…','info');
   document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('loaded'));
@@ -1250,20 +1249,22 @@ window.loadScenario=async function(level){
   };
   const cfg=configs[level];
 
-  // Purge démo existante
   if(useFirebase){
     const purge=async(colName)=>{
       const snap=await getDocs(collection(db,colName));
-      const b=writeBatch(db); snap.forEach(d=>{ if(d.data().isDemo)b.delete(d.ref); }); await b.commit();
+      const b=writeBatch(db);
+      snap.forEach(d=>{ if(d.data().isDemo)b.delete(d.ref); });
+      await b.commit();
     };
-    await purge('commandes'); await purge('retours'); await purge('receptions');
+    await purge('commandes');
+    await purge('retours');
+    await purge('receptions');
   } else {
     DATA.commandes=DATA.commandes.filter(c=>!c.isDemo);
     DATA.retours=DATA.retours.filter(c=>!c.isDemo);
     DATA.receptions=DATA.receptions.filter(c=>!c.isDemo);
   }
 
-  // Générer
   const cmdList=[], retList=[], recList=[];
   for(let i=0;i<cfg.cmds;i++){
     const arts=[randomEl(ARTICLES),randomEl(ARTICLES),randomEl(ARTICLES)];
@@ -1283,11 +1284,12 @@ window.loadScenario=async function(level){
     const art=randomEl(ARTICLES);
     retList.push({
       id:uid(),ref:'RET-'+uid(),article:art.nom,refArt:art.ref,
-      qte:randomInt(1,5),motif:randomEl(MOTIFS_RETOUR),
+      qte:randomInt(1,5),motif:randomEl(MOTIFSRETOUR),
       status:Math.random()>cfg.ncRatio?'conforme':'non-conforme',
       createdAt:Date.now()-randomInt(0,43200000),isDemo:true,
     });
   }
+
   for(let i=0;i<cfg.receps;i++){
     const art=randomEl(ARTICLES), art2=randomEl(ARTICLES);
     recList.push({
