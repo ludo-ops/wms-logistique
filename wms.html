@@ -734,17 +734,8 @@ window.deleteArticle = async function(id, e){
   if(!confirm('Supprimer définitivement cet article ?')) return;
 
   try{
-    if(useFirebase){
-      await deleteDoc(doc(db,'articles',id));
-      if(typeof loadData === 'function') await loadData();
-    } else {
-      ARTICLES = (ARTICLES || []).filter(a => a.id !== id);
-      if(typeof DATA !== 'undefined' && Array.isArray(DATA.articles)){
-        DATA.articles = DATA.articles.filter(a => a.id !== id);
-      }
-      localStorage.setItem('wmsarticles', JSON.stringify(ARTICLES));
-    }
-
+    await deleteDoc(doc(db,'articles',id));
+    if(typeof loadData === 'function') await loadData();
     if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
     showToast('Article supprimé', 'success');
   } catch(error){
