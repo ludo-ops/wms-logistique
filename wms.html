@@ -733,17 +733,24 @@ window.deleteArticle = async function(id, e){
   if(e) e.stopPropagation();
   if(!confirm('Supprimer définitivement cet article ?')) return;
 
-  if(useFirebase){
-    await deleteDoc(doc(db,'articles',id));
-  } else {
-    ARTICLES = ARTICLES.filter(a => a.id !== id);
-    if(typeof DATA !== 'undefined' && DATA.articles) DATA.articles = DATA.articles.filter(a => a.id !== id);
-    saveLocal('articles');
-  }
+  try{
+    if(useFirebase){
+      await deleteDoc(doc(db,'articles',id));
+      await loadData();
+    } else {
+      ARTICLES = ARTICLES.filter(a => a.id !== id);
+      if(typeof DATA !== 'undefined' && DATA.articles) {
+        DATA.articles = DATA.articles.filter(a => a.id !== id);
+      }
+      saveLocal('articles');
+    }
 
-  loadData();
-  if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
-  showToast('Article supprimé', 'success');
+    if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
+    showToast('Article supprimé', 'success');
+  } catch(error){
+    console.error('Erreur suppression article:', error);
+    showToast('Erreur lors de la suppression', 'error');
+  }
 };
 
 // ══ COMMANDES ══
