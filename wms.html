@@ -1419,9 +1419,13 @@ window.loadScenario = async function (level) {
     if (useFirebase) {
       const bCmd = writeBatch(db);
       cmdList.forEach(cmd => {
-        const ref = doc(collection(db, 'commandes'));
-        cmd.id = ref.id;
-        bCmd.set(ref, cmd);
+       const ref = doc(collection(db, 'commandes'));
+       cmd.id = ref.id;
+       const safeCmd = {
+        ...cmd,
+        responsable: cmd.responsable ?? ''
+       };
+       bCmd.set(ref, safeCmd);
       });
       await bCmd.commit();
 
