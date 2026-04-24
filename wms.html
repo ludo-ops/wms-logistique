@@ -229,6 +229,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -1132,6 +1133,7 @@ window.loadArticlesWMS = function(){
               <div style="font-family:monospace;color:var(--accent2);font-size:.8rem;">${a.ref}</div>
               <div style="margin-top:.35rem;color:var(--dim);font-size:.8rem;">Stock: ${a.stock} • ${a.prix} €</div>
               <div style="font-size:.7rem;color:var(--dim);">ID: ${a.id}</div>
+              <div id="qr-${a.id}" style="margin-top:.75rem;width:80px;height:80px;"></div>
               <div style="margin-top:.75rem;">
                 <button class="btn btn-danger btn-sm" onclick="deleteArticle('${a.id}', event)">🗑 Supprimer</button>
               </div>
@@ -1140,7 +1142,20 @@ window.loadArticlesWMS = function(){
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') setTimeout(() => {
+  (window.ARTICLES || []).forEach(a => {
+    const el = document.getElementById('qr-' + a.id);
+    if (el && !el.childNodes.length) {
+      new QRCode(el, {
+        text: a.ref,
+        width: 80,
+        height: 80,
+        colorDark: '#00d4ff',
+        colorLight: '#111827'
+      });
+    }
+  });
+}, 150);
 }
 
 function renderReceptions(){
