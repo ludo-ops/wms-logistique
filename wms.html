@@ -777,6 +777,7 @@ function buildCmdActions(cmd){
   if(cmd.status==='en-attente') html+=`<button class="btn btn-primary btn-sm" onclick="startCommande('${cmd.id}')">▶ Commencer</button>`;
   if(cmd.status==='en-cours') html+=`<button class="btn btn-success btn-sm" onclick="openValidate('${cmd.id}')">✅ Valider</button>`;
   if(cmd.status!=='expediee') html+=`<button class="btn btn-ghost btn-sm" onclick="openPrint('${cmd.id}')">🖨️</button>`;
+  if(cmd.status==='expediee') html+=`<button class="btn btn-danger btn-sm" onclick="deleteCommande('${cmd.id}')">🗑️ Supprimer</button>`;
   return html;
 }
 
@@ -962,6 +963,20 @@ async function updateCommande(id,data){
   if(useFirebase){ await updateDoc(doc(db,'commandes',id),data); }
   else { const c=DATA.commandes.find(c=>c.id===id); if(c){ Object.assign(c,data); saveLocal('commandes'); } }
 }
+
+window.deleteCommande = async function(id){
+  if(!confirm('Supprimer définitivement cette commande ?')) return;
+
+  if(useFirebase){
+    await deleteDoc(doc(db,'commandes',id));
+  } else {
+    DATA.commandes = DATA.commandes.filter(c => c.id !== id);
+    saveLocal('commandes');
+  }
+
+  loadData();
+  showToast('Commande supprimée', 'success');
+};
 
 // ══ RETOURS ══
 let allRetours=[];
