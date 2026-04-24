@@ -1417,25 +1417,34 @@ window.loadScenario = async function (level) {
     }
 
     if (useFirebase) {
-      const bCmd = writeBatch(db);
-      cmdList.forEach(cmd => {
-       const ref = doc(collection(db, 'commandes'));
-       cmd.id = ref.id;
-       const safeCmd = {
-        ...cmd,
-        responsable: cmd.responsable ?? ''
-       };
-       bCmd.set(ref, safeCmd);
-      });
-      await bCmd.commit();
+  const bCmd = writeBatch(db);
+  cmdList.forEach(cmd => {
+    const ref = doc(collection(db, 'commandes'));
+    cmd.id = ref.id;
+    const safeCmd = {
+      ...cmd,
+      responsable: typeof cmd.responsable === 'string' ? cmd.responsable : ''
+    };
+    bCmd.set(ref, safeCmd);
+  });
+  await bCmd.commit();
 
-      const bRet = writeBatch(db);
-      retList.forEach(r => {
-        const ref = doc(collection(db, 'retours'));
-        r.id = ref.id;
-        bRet.set(ref, r);
-      });
-      await bRet.commit();
+  const bRet = writeBatch(db);
+  retList.forEach(r => {
+    const ref = doc(collection(db, 'retours'));
+    r.id = ref.id;
+    bRet.set(ref, r);
+  });
+  await bRet.commit();
+
+  const bRec = writeBatch(db);
+  recList.forEach(r => {
+    const ref = doc(collection(db, 'receptions'));
+    r.id = ref.id;
+    bRec.set(ref, r);
+  });
+  await bRec.commit();
+}
 
       const bRec = writeBatch(db);
       recList.forEach(r => {
