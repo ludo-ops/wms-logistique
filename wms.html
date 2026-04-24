@@ -786,12 +786,19 @@ window.filterCommandes=function(v){ filterText=v; renderCommandes(); };
 window.filterCommandeStatus=function(v){ filterStatus=v; renderCommandes(); };
 window.filterCommandeMode=function(v){ filterMode=v; renderCommandes(); };
 
-window.generateDemoCommandes=async function(){
+window.generateDemoCommandes = async function(){
+  const arts = (ARTICLES || []).filter(a => a && a.nom && a.ref);
+  if(!arts.length){ showToast('Aucun article chargé depuis Firebase', 'error'); return; }
+
   showToast('Génération de 35 commandes…','info');
   const batch=[];
   for(let i=0;i<35;i++){
-    const art1=randomEl(ARTICLES), art2=randomEl(ARTICLES), art3=randomEl(ARTICLES.slice(0,20));
-    const mode=randomEl(MODES), now=new Date();
+    const shuffled = [...arts].sort(() => Math.random() - 0.5);
+    const art1 = shuffled[0];
+    const art2 = shuffled[1 % shuffled.length];
+    const art3 = shuffled[2 % shuffled.length];
+    const mode = randomEl(MODES), now = new Date();
+
     const cmd={
       ref:'CMD-'+uid(),
       client:randomEl(CLIENTS),
@@ -958,11 +965,14 @@ async function updateCommande(id,data){
 
 // ══ RETOURS ══
 let allRetours=[];
-window.generateDemoRetours=async function(){
+window.generateDemoRetours = async function(){
+  const arts = (ARTICLES || []).filter(a => a && a.nom && a.ref);
+  if(!arts.length){ showToast('Aucun article chargé depuis Firebase', 'error'); return; }
+
   showToast('Génération de 10 retours…','info');
   const list=[];
   for(let i=0;i<10;i++){
-    const art=randomEl(ARTICLES);
+    const art = randomEl(arts);
     list.push({
       id:uid(), ref:'RET-'+uid(),
       article:art.nom, refArt:art.ref, qte:randomInt(1,5),
@@ -1035,16 +1045,20 @@ async function updateRetour(id,data){
 
 // ══ RECEPTIONS ══
 let allReceptions=[];
-window.generateDemoReceptions=async function(){
+window.generateDemoReceptions = async function(){
+  const arts = (ARTICLES || []).filter(a => a && a.nom && a.ref);
+  if(!arts.length){ showToast('Aucun article chargé depuis Firebase', 'error'); return; }
+
   showToast('Génération de 10 réceptions…','info');
   const list=[];
   for(let i=0;i<10;i++){
-    const art=randomEl(ARTICLES), art2=randomEl(ARTICLES);
+    const picked = [...arts].sort(() => Math.random() - 0.5).slice(0, randomInt(1, 3));
     list.push({
-      id:uid(), ref:'REC-'+uid(),
+      id:uid(),
+      ref:'REC-'+uid(),
       fournisseur:randomEl(FOURNISSEURS),
-      articles:`${art.nom}, ${art2.nom}`,
-      qteAttendue:randomInt(10,100),
+      articles:picked.map(a => a.nom).join(', '),
+      qteAttendue:randomInt(1,20),
       status:Math.random()>.35?'conforme':'non-conforme',
       createdAt:Date.now()-randomInt(0,43200000),
       isDemo:true,
