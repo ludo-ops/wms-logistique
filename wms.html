@@ -736,13 +736,13 @@ window.deleteArticle = async function(id, e){
   try{
     if(useFirebase){
       await deleteDoc(doc(db,'articles',id));
-      await loadData();
+      if(typeof loadData === 'function') await loadData();
     } else {
-      ARTICLES = ARTICLES.filter(a => a.id !== id);
-      if(typeof DATA !== 'undefined' && DATA.articles) {
+      ARTICLES = (ARTICLES || []).filter(a => a.id !== id);
+      if(typeof DATA !== 'undefined' && Array.isArray(DATA.articles)){
         DATA.articles = DATA.articles.filter(a => a.id !== id);
       }
-      saveLocal('articles');
+      localStorage.setItem('wmsarticles', JSON.stringify(ARTICLES));
     }
 
     if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
