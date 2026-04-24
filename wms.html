@@ -526,7 +526,11 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="section" id="section-articles">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem;">
     <h2 style="margin:0;">📋 Catalogue Articles</h2>
-    <button onclick="openAddArticleForm()" class="btn btn-success">➕ Ajouter un article</button>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <button onclick="openAddArticleForm()" class="btn btn-success">➕ Ajouter un article</button>
+      <button onclick="document.getElementById('json-import-input').click()" class="btn btn-ghost">📥 Importer JSON</button>
+      <input type="file" id="json-import-input" accept=".json" style="display:none" onchange="importArticlesJSON(this)">
+    </div>
   </div>
   <div id="articlesWMSContainer"></div>
 </div>
@@ -1477,6 +1481,42 @@ function restoreScenarioState(){
   if(s) document.getElementById('card-'+s)?.classList.add('loaded');
 }
 
+window.importArticlesJSON = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const articles = JSON.parse(text);
+    if (!Array.isArray(articles)) { showToast('Format invalide', 'error'); return; }
+    showToast(`Import de ${articles.length} articles...`, 'info');
+    if (useFirebase) {
+      const b = writeBatch(db);
+      articles.forEach(a => {
+        const ref = doc(collection(db, 'articles'));
+        b.set(ref, {
+          nom: (a.nom ?? '').trim(),
+          ref: (a.ref ?? '').trim(),
+          cat: (a.cat ?? '').trim(),
+          prix: Number(a.prix ?? 0),
+          stock: Number(a.stock ?? 0)
+        });
+      });
+      await b.commit();
+      showToast(`✅ ${articles.length} articles importés dans Firebase !`, 'success');
+    } else {
+      showToast('Firebase indisponible', 'error');
+    }
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'error');
+  }
+  input.value = '';
+};
+
+// ══ INIT ══
+(async function init(){
+  restoreScenarioState();
+  await loadData();
+  ...
 // ══ INIT ══
 (async function init(){
   restoreScenarioState();
