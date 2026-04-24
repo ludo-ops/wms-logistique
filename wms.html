@@ -626,7 +626,7 @@ if (useFirebase) {
 }
 
 const CLIENTS = ['Entreprise Dupont','Mairie de Lyon','École Pasteur','Cabinet Martin','Société Renard','Atelier Leblanc','Centre Médical Duval','Clinique Saint-Luc','Lycée Jules Ferry','Association Vert Espoir','Hôtel Bristol','Restaurant Le Coin','Pharmacie Centrale','Cabinet Juridique Noir','Agence Immobilière Sud'];
-const RESPONSABLES = [];
+const RESPONSABLES = ['Alice Martin','Bob Leroy','Claire Dubois','David Moreau','Emma Bernard','François Petit','Gaëlle Simon','Hugo Fournier'];
 const MODES = ['Standard','Express','Urgent'];
 const MOTIFS_RETOUR = ['Article défectueux','Erreur de commande','Surplus de stock','Mauvaise référence','Emballage endommagé','Article non conforme aux specs'];
 const FOURNISSEURS = ['Bureau Plus SAS','Office Depot','Lyreco France','Bruneau Distribution','Staples Pro'];
@@ -816,7 +816,7 @@ window.generateDemoCommandes = async function(){
     const cmd={
       ref:'CMD-'+uid(),
       client:randomEl(CLIENTS),
-      responsable:'',
+      responsable:randomEl(RESPONSABLES),
       mode,
       status:'en-attente',
       progress:0,
@@ -842,15 +842,7 @@ window.generateDemoCommandes = async function(){
 async function saveCommandes(list){
   if(useFirebase){
     const b=writeBatch(db);
-    list.forEach(cmd => {
-      const ref = doc(collection(db,'commandes'));
-      cmd.id = ref.id;
-      const safeCmd = {
-        ...cmd,
-        responsable: cmd.responsable ?? ''
-      };
-      b.set(ref, safeCmd);
-    });
+    list.forEach(cmd=>{ const ref=doc(collection(db,'commandes')); cmd.id=ref.id; b.set(ref,cmd); });
     await b.commit();
   } else {
     list.forEach(cmd=>{ if(!cmd.id)cmd.id=uid(); DATA.commandes.push(cmd); });
@@ -867,19 +859,11 @@ window.purgeCommandes=async function(){
   loadData(); showToast('Commandes démo supprimées','warn');
 };
 
-window.startCommande = async function(id){
-  const nom = prompt("Nom du responsable ?");
-  if (!nom || !nom.trim()) return;
-
-  const responsable = nom.trim();
-
-  await updateCommande(id, {
-    status: 'en-cours',
-    responsable
-  });
-
-  showToast(`Commande prise en charge par ${responsable}`, 'info');
-  loadData();
+window.startCommande=async function(id){
+  const nom=prompt('Nom de l\'élève responsable ?','');
+  if(!nom)return;
+  await updateCommande(id,{status:'en-cours',responsable:nom});
+  showToast('Commande en cours','info'); loadData();
 };
 
 window.openValidate=function(id){
@@ -988,21 +972,9 @@ function updateStats(){
     <div class="stat-card c-red"><div class="stat-val">${urg}</div><div class="stat-label">Urgentes</div></div>`;
 }
 
-async function updateCommande(id, data){
-  const safeData = {
-    ...data,
-    responsable: data.responsable ?? ''
-  };
-
-  if (useFirebase) {
-    await updateDoc(doc(db, 'commandes', id), safeData);
-  } else {
-    const c = DATA.commandes.find(c => c.id === id);
-    if (c) {
-      Object.assign(c, safeData);
-      saveLocal('commandes');
-    }
-  }
+async function updateCommande(id,data){
+  if(useFirebase){ await updateDoc(doc(db,'commandes',id),data); }
+  else { const c=DATA.commandes.find(c=>c.id===id); if(c){ Object.assign(c,data); saveLocal('commandes'); } }
 }
 
 window.deleteCommande = async function(id){
@@ -1425,34 +1397,21 @@ window.loadScenario = async function (level) {
     }
 
     if (useFirebase) {
-  const bCmd = writeBatch(db);
-  cmdList.forEach(cmd => {
-    const ref = doc(collection(db, 'commandes'));
-    cmd.id = ref.id;
-    const safeCmd = {
-      ...cmd,
-      responsable: typeof cmd.responsable === 'string' ? cmd.responsable : ''
-    };
-    bCmd.set(ref, safeCmd);
-  });
-  await bCmd.commit();
+      const bCmd = writeBatch(db);
+      cmdList.forEach(cmd => {
+        const ref = doc(collection(db, 'commandes'));
+        cmd.id = ref.id;
+        bCmd.set(ref, cmd);
+      });
+      await bCmd.commit();
 
-  const bRet = writeBatch(db);
-  retList.forEach(r => {
-    const ref = doc(collection(db, 'retours'));
-    r.id = ref.id;
-    bRet.set(ref, r);
-  });
-  await bRet.commit();
-
-  const bRec = writeBatch(db);
-  recList.forEach(r => {
-    const ref = doc(collection(db, 'receptions'));
-    r.id = ref.id;
-    bRec.set(ref, r);
-  });
-  await bRec.commit();
-}
+      const bRet = writeBatch(db);
+      retList.forEach(r => {
+        const ref = doc(collection(db, 'retours'));
+        r.id = ref.id;
+        bRet.set(ref, r);
+      });
+      await bRet.commit();
 
       const bRec = writeBatch(db);
       recList.forEach(r => {
