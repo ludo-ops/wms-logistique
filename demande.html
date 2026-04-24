@@ -429,25 +429,28 @@ if (useFirebase) {
     
     // 1. On récupère les données
     ARTICLES = snap.docs.map(function(d) {
-      const data = d.data();
-      return Object.assign({id: d.id}, data, {
-        prix: parseFloat(data.prix) || 0,
-        stock: parseInt(data.stock) || 0
-      });
-    });
-    
-    // 2. On met à jour la liste pour l'écran
-    filteredArticles = [...ARTICLES];
-    
-    // 3. On met à jour les boutons de catégories
-    if (typeof initCats === 'function') initCats();
-    
-    // 4. On dessine les articles sur la page
-    if (typeof renderArticles === 'function') renderArticles();
-    
-  }, function(error) {
-    console.error("Erreur de chargement Firebase:", error);
+  const data = d.data();
+  return Object.assign({id: d.id}, data, {
+    nom: (data.nom ?? '').trim(),
+    ref: (data.ref ?? '').trim(),
+    cat: (data.cat ?? '').trim(),
+    prix: parseFloat(data.prix) || 0,
+    stock: parseInt(data.stock) || 0
   });
+}).filter(a => a.nom && a.ref && a.cat);
+
+// 2. On met à jour la liste pour l'écran
+filteredArticles = [...ARTICLES];
+
+// 3. On met à jour les boutons de catégories
+if (typeof initCats === 'function') initCats();
+
+// 4. On dessine les articles sur la page
+if (typeof renderArticles === 'function') renderArticles();
+
+}, function(error) {
+  console.error("Erreur de chargement Firebase:", error);
+});
 }
 
 // ══ State ══
@@ -519,11 +522,11 @@ function renderArticles(){
     const sel=qty>0;
     return `<div class="article-card${sel?' selected':''}" id="acard-${a.id}">
       ${sel?'<div class="selected-indicator"></div>':''}
-      <div class="article-cat">${a.cat}</div>
-      <div class="article-nom">${a.nom}</div>
-      <div class="article-ref">${a.ref}</div>
-      <div class="article-prix">${fmtEur(a.prix)}</div>
-      <div class="article-stock">Stock : ${a.stock} unités</div>
+      <div class="article-cat">${a.cat ?? 'Sans catégorie'}</div>
+      <div class="article-nom">${a.nom ?? 'Sans nom'}</div>
+      <div class="article-ref">${a.ref ?? 'Sans réf'}</div>
+      <div class="article-prix">${fmtEur(Number(a.prix ?? 0))}</div>
+      <div class="article-stock">Stock : ${Number(a.stock ?? 0)} unités</div>
       <div class="article-qty">
         <button class="qty-btn" onclick="changeQty('${a.id}',-1,event)">−</button>
         <span class="qty-val" id="qty-${a.id}">${qty}</span>
@@ -556,12 +559,12 @@ window.changeQty=function(id,delta,e){
 };
 
 function updateCartBar(){
-  const items=Object.entries(cart).map(([id,qty])=>({...ARTICLES.find(a=>  a.id===id),qte:qty,scanned:0}));
-  const total=items.reduce((s,i)=>s+i.prix*i.qty,0);
-  const count=items.reduce((s,i)=>s+i.qty,0);
+  const items=Object.entries(cart).map(([id,qty])=>({...ARTICLES.find(a=>a.id===id),qte:qty,scanned:0}));
+  const total=items.reduce((s,i)=>s+i.prix*i.qte,0);
+  const count=items.reduce((s,i)=>s+i.qte,0);
   document.getElementById('cart-count').textContent=count+' article'+(count>1?'s':'');
   document.getElementById('cart-total').textContent='Total : '+fmtEur(total);
-  document.getElementById('cart-preview').innerHTML=items.slice(0,3).map(i=>`<span class="cart-chip">${i.nom.slice(0,20)} ×${i.qty}</span>`).join('')+(items.length>3?`<span class="cart-chip">+${items.length-3} autres</span>`:'');
+  document.getElementById('cart-preview').innerHTML=items.slice(0,3).map(i=>`<span class="cart-chip">${i.nom.slice(0,20)} ×${i.qte}</span>`).join('')+(items.length>3?`<span class="cart-chip">+${items.length-3} autres</span>`:'');
   document.getElementById('btn-step1').disabled=count===0;
 }
 
