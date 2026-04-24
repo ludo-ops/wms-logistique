@@ -729,6 +729,23 @@ window.saveNewArticle = async function(){
   }
 };
 
+window.deleteArticle = async function(id, e){
+  if(e) e.stopPropagation();
+  if(!confirm('Supprimer définitivement cet article ?')) return;
+
+  if(useFirebase){
+    await deleteDoc(doc(db,'articles',id));
+  } else {
+    ARTICLES = ARTICLES.filter(a => a.id !== id);
+    if(typeof DATA !== 'undefined' && DATA.articles) DATA.articles = DATA.articles.filter(a => a.id !== id);
+    saveLocal('articles');
+  }
+
+  loadData();
+  if(typeof loadArticlesWMS === 'function') loadArticlesWMS();
+  showToast('Article supprimé', 'success');
+};
+
 // ══ COMMANDES ══
 let allCommandes = [];
 let filterText='', filterStatus='', filterMode='';
@@ -1013,13 +1030,18 @@ function renderRetours(){
   allRetours.forEach(r=>{
     const statusTag=`<span class="status ${r.status}">${r.status==='conforme'?'Conforme':r.status==='non-conforme'?'Non conforme':r.status==='quarantaine'?'Quarantaine':'Résolu'}</span>`;
     let actions='';
-    if(r.status==='conforme') actions=`<button class="btn btn-success btn-sm" onclick="cloturerRetour('${r.id}')">✅ Clôturer</button>`;
+    if(r.status==='conforme') actions=`
+      <button class="btn btn-success btn-sm" onclick="cloturerRetour('${r.id}')">✅ Clôturer</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRetour('${r.id}')">🗑 Supprimer</button>`;
     else if(r.status==='non-conforme') actions=`
       <button class="btn btn-warn btn-sm" onclick="actionRetour('${r.id}','quarantaine')">🔒 Quarantaine</button>
       <button class="btn btn-ghost btn-sm" onclick="actionRetour('${r.id}','fournisseur')">📤 Fournisseur</button>
       <button class="btn btn-ghost btn-sm" onclick="actionRetour('${r.id}','stock')">📦 Stock</button>
-      <button class="btn btn-danger btn-sm" onclick="openLitige('${r.id}')">⚠️ Litige</button>`;
-    else actions=`<span style="color:var(--green);font-size:.8rem">✅ Traité</span>`;
+      <button class="btn btn-danger btn-sm" onclick="openLitige('${r.id}')">⚠️ Litige</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRetour('${r.id}')">🗑 Supprimer</button>`;
+    else actions=`
+      <span style="color:var(--green);font-size:.8rem">✅ Traité</span>
+      <button class="btn btn-danger btn-sm" onclick="deleteRetour('${r.id}')">🗑 Supprimer</button>`;
     tbody.innerHTML+=`<tr>
       <td><span class="cmd-ref">${r.ref}</span></td>
       <td>${r.article}</td><td>${r.qte}</td>
